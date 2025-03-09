@@ -1,0 +1,72 @@
+#:kivy 2.0.0
+
+<CartScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        
+        # Top section - Running total
+        Label:
+            id: total_label
+            text: 'Running Total: $0.00'
+            font_size: '24sp'
+            size_hint: 1.0, 0.15
+            
+        # Middle section - Scrollable list of items
+        BoxLayout:
+            orientation: 'vertical'
+            size_hint: 1.0, 0.6
+            
+            ScrollView:
+                id: items_scroll
+                BoxLayout:
+                    id: items_container
+                    orientation: 'vertical'
+                    size_hint_y: None
+                    height: self.minimum_height
+        
+        # Bottom section - Buttons
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint: 1.0, 0.15
+            spacing: 10
+            padding: 10
+            
+            Button:
+                id: scan_button
+                text: 'Scan Item'
+                font_size: 20
+                on_press: root.scan_item(self)
+                
+            Button:
+                id: end_button
+                text: 'End Session'
+                font_size: 20
+                on_press: root.end_session(self)
+        
+        # Sensor data overlay
+        Label:
+            id: sensor_label
+            text: 'Distance: 0.0 cm | Weight: 0.0 kg'
+            size_hint: 1.0, 0.1
+            font_size: '16sp'
+
+<ItemWidget@BoxLayout>:
+    orientation: 'horizontal'
+    size_hint_y: None
+    height: 40
+    item_id: 0
+    item_name: ''
+    item_price: 0.0
+    
+    Label:
+        text: f"{root.item_name} - ${root.item_price:.2f}"
+        size_hint: 0.8, 1.0
+        halign: 'left'
+        text_size: self.width, None
+        font_size: '16sp'
+        
+    Button:
+        text: 'X'
+        size_hint: 0.2, 1.0
+        background_color: 1, 0.5, 0.5, 1
+        on_press: app.root.remove_item(root.item_id)
