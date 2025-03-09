@@ -36,6 +36,9 @@ class MockUltrasonicSensor:
     def cleanup(self):
         self.stop_simulation()
 
+    def get_distance(self):
+        return random.uniform(0.5, 5.0)
+
 
 class MockLoadSensor:
     def __init__(self):
@@ -86,6 +89,9 @@ class MockLoadSensor:
         """Set current weight as zero/reference"""
         self.weight = 0.0
         return True
+
+    def get_weight(self):
+        return random.uniform(0.0, 10.0)
 
 
 class MockBarcodeScanner:

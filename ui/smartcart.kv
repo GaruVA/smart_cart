@@ -1,47 +1,53 @@
 #:kivy 2.0.0
+#:import Factory kivy.factory.Factory
 
 <CartScreen>:
     BoxLayout:
         orientation: 'vertical'
         
-        # Top section - Running total
-        Label:
-            id: total_label
-            text: 'Running Total: $0.00'
-            font_size: '24sp'
-            size_hint: 1.0, 0.15
+        # Top section - Running total and connection status
+        BoxLayout:
+            size_hint_y: None
+            height: '48dp'
+            
+            Label:
+                id: total_label
+                text: 'Total: $0.00'
+                font_size: 32
+                size_hint_x: 0.8
+                
+            Label:
+                id: connection_status
+                text: ''
+                size_hint_x: 0.2
+                color: 1, 1, 1, 1
+                canvas.before:
+                    Color:
+                        rgba: [0.2, 0.7, 0.2, 1] if self.text == 'Online' else [0.7, 0.2, 0.2, 1] if self.text == 'Offline' else [0, 0, 0, 0]
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
             
         # Middle section - Scrollable list of items
-        BoxLayout:
-            orientation: 'vertical'
-            size_hint: 1.0, 0.6
-            
-            ScrollView:
-                id: items_scroll
-                BoxLayout:
-                    id: items_container
-                    orientation: 'vertical'
-                    size_hint_y: None
-                    height: self.minimum_height
+        ScrollView:
+            GridLayout:
+                id: item_list
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
         
         # Bottom section - Buttons
         BoxLayout:
-            orientation: 'horizontal'
-            size_hint: 1.0, 0.15
-            spacing: 10
-            padding: 10
+            size_hint_y: None
+            height: '48dp'
             
             Button:
-                id: scan_button
                 text: 'Scan Item'
-                font_size: 20
-                on_press: root.scan_item(self)
+                on_press: app.scan_item()
                 
             Button:
-                id: end_button
-                text: 'End Session'
-                font_size: 20
-                on_press: root.end_session(self)
+                text: 'Checkout'
+                on_press: app.checkout()
         
         # Sensor data overlay
         Label:
@@ -50,13 +56,10 @@
             size_hint: 1.0, 0.1
             font_size: '16sp'
 
-<ItemWidget@BoxLayout>:
+<ItemWidget>:
     orientation: 'horizontal'
     size_hint_y: None
     height: 40
-    item_id: 0
-    item_name: ''
-    item_price: 0.0
     
     Label:
         text: f"{root.item_name} - ${root.item_price:.2f}"
