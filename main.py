@@ -444,7 +444,7 @@ class CartScreen(BoxLayout):
         header_label = Label(
             text="Checkout Complete",
             font_size='20sp',  # Reduced font size
-            color=get_color_from_hex('#212121'),
+            color=get_color_from_hex('#2196F3'),  # Changed to primary blue color
             size_hint_y=None,
             height='30dp',  # Reduced height
             bold=True,
@@ -531,7 +531,7 @@ class CartScreen(BoxLayout):
         
         total_label = Label(
             text=f"Total Amount: ${total:.2f}",
-            color=get_color_from_hex('#212121'),
+            color=get_color_from_hex('#2196F3'),  # Changed to primary blue color
             font_size='18sp',  # Reduced font size
             bold=True,
             size_hint_y=None,
