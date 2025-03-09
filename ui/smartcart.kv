@@ -1,75 +1,232 @@
 #:kivy 2.0.0
 #:import Factory kivy.factory.Factory
+#:import get_color_from_hex kivy.utils.get_color_from_hex
+
+# Define custom colors
+#:set primary_color get_color_from_hex('#2196F3')  # Material Blue
+#:set success_color get_color_from_hex('#4CAF50')  # Material Green
+#:set danger_color get_color_from_hex('#F44336')   # Material Red
+#:set text_color get_color_from_hex('#212121')     # Dark Grey
+#:set bg_color get_color_from_hex('#FAFAFA')       # Light Grey
+
+<CustomButton@Button>:
+    background_normal: ''
+    background_color: primary_color
+    color: 1, 1, 1, 1
+    size_hint_y: None
+    height: '40dp'  # Reduced from 48dp
+    font_size: '16sp'  # Reduced from 18sp
+    canvas.before:
+        Color:
+            rgba: self.background_color
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [5,]
+
+<CustomPopup@Popup>:
+    background: ''
+    background_color: [0, 0, 0, 0.5]
+    canvas.before:
+        Color:
+            rgba: get_color_from_hex('#FFFFFF')
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [10,]
+            
+<CustomInput@TextInput>:
+    background_normal: ''
+    background_active: ''
+    padding: [10, 10, 10, 10]
+    font_size: '16sp'
+    multiline: False
+    cursor_color: primary_color
+    canvas.before:
+        Color:
+            rgba: get_color_from_hex('#E0E0E0')
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [5,]
+
+<SampleBarcodeButton@Button>:
+    background_normal: ''
+    background_color: get_color_from_hex('#FFFFFF')
+    color: primary_color
+    size_hint_y: None
+    height: '45dp'
+    font_size: '16sp'
+    bold: True
+    canvas.before:
+        Color:
+            rgba: self.background_color if self.state == 'normal' else get_color_from_hex('#E3F2FD')
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [5,]
+        # Add border
+        Color:
+            rgba: primary_color
+        Line:
+            rounded_rectangle: [self.x, self.y, self.width, self.height, 5]
+            width: 1
 
 <CartScreen>:
+    canvas.before:
+        Color:
+            rgba: get_color_from_hex('#FAFAFA')
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
     BoxLayout:
         orientation: 'vertical'
+        padding: '8dp'  # Reduced padding
+        spacing: '8dp'  # Reduced spacing
         
-        # Top section - Running total and connection status
+        # Top section - Running total and hidden connection status
         BoxLayout:
             size_hint_y: None
-            height: '48dp'
+            height: '50dp'  # Reduced from 60dp
+            padding: '5dp'
+            canvas.before:
+                Color:
+                    rgba: get_color_from_hex('#FFFFFF')
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [5,]
+            
+            # Hidden debug area (double tap to show scan dialog)
+            Button:
+                size_hint_x: 0.2
+                background_color: 0, 0, 0, 0
+                on_touch_down: if args[1].is_double_tap: app.scan_item()
             
             Label:
                 id: total_label
                 text: 'Total: $0.00'
-                font_size: 32
-                size_hint_x: 0.8
+                font_size: '24sp'  # Reduced from 32sp
+                size_hint_x: 0.6
+                color: text_color
+                bold: True
                 
+            # Connection status (small and subtle)
             Label:
                 id: connection_status
                 text: ''
                 size_hint_x: 0.2
-                color: 1, 1, 1, 1
-                canvas.before:
-                    Color:
-                        rgba: [0.2, 0.7, 0.2, 1] if self.text == 'Online' else [0.7, 0.2, 0.2, 1] if self.text == 'Offline' else [0, 0, 0, 0]
-                    Rectangle:
-                        pos: self.pos
-                        size: self.size
-            
+                font_size: '12sp'
+                color: success_color if self.text == 'Online' else danger_color if self.text == 'Offline' else [0, 0, 0, 0]
+                
         # Middle section - Scrollable list of items
-        ScrollView:
-            GridLayout:
-                id: item_list
-                cols: 1
+        BoxLayout:
+            orientation: 'vertical'
+            canvas.before:
+                Color:
+                    rgba: get_color_from_hex('#FFFFFF')
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [5,]
+                    
+            Label:
+                text: 'Shopping Cart'
                 size_hint_y: None
-                height: self.minimum_height
+                height: '35dp'  # Reduced from 40dp
+                font_size: '18sp'  # Reduced from 20sp
+                color: text_color
+                bold: True
+                
+            ScrollView:
+                do_scroll_x: False
+                bar_width: '10dp'
+                GridLayout:
+                    id: item_list
+                    cols: 1
+                    size_hint_y: None
+                    height: self.minimum_height
+                    spacing: '5dp'
+                    padding: '10dp'
         
-        # Bottom section - Buttons
+        # Bottom section - Checkout button only
         BoxLayout:
             size_hint_y: None
-            height: '48dp'
+            height: '50dp'  # Reduced from 60dp
+            spacing: '10dp'
             
-            Button:
-                text: 'Scan Item'
-                on_press: app.scan_item()
+            Widget:
+                size_hint_x: 0.3
                 
-            Button:
+            CustomButton:
                 text: 'Checkout'
+                size_hint_x: 0.4
                 on_press: app.checkout()
+                background_color: success_color
+                
+            Widget:
+                size_hint_x: 0.3
         
-        # Sensor data overlay
+        # Sensor data overlay (small and subtle)
         Label:
             id: sensor_label
             text: 'Distance: 0.0 cm | Weight: 0.0 kg'
-            size_hint: 1.0, 0.1
-            font_size: '16sp'
+            font_size: '12sp'
+            size_hint_y: None
+            height: '20dp'
+            color: get_color_from_hex('#9E9E9E')
 
 <ItemWidget>:
-    orientation: 'horizontal'
+    orientation: 'vertical'
     size_hint_y: None
-    height: 40
+    height: '70dp'  # Reduced from 80dp
+    padding: '5dp'
+    spacing: '2dp'
+    canvas.before:
+        Color:
+            rgba: get_color_from_hex('#F5F5F5')
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [5,]
     
-    Label:
-        text: f"{root.item_name} - ${root.item_price:.2f}"
-        size_hint: 0.8, 1.0
-        halign: 'left'
-        text_size: self.width, None
-        font_size: '16sp'
+    BoxLayout:
+        orientation: 'horizontal'
         
-    Button:
-        text: 'X'
-        size_hint: 0.2, 1.0
-        background_color: 1, 0.5, 0.5, 1
-        on_press: app.root.remove_item(root.item_id)
+        BoxLayout:
+            orientation: 'vertical'
+            size_hint_x: 0.8
+            spacing: '2dp'
+            
+            Label:
+                text: f"{root.item_name}"
+                color: text_color
+                font_size: '16sp'  # Reduced from 18sp
+                bold: True
+                halign: 'left'
+                text_size: self.width, None
+                size_hint_y: 0.6
+                
+            Label:
+                text: f"${root.item_price:.2f}"
+                color: primary_color
+                font_size: '14sp'  # Reduced from 16sp
+                halign: 'left'
+                text_size: self.width, None
+                size_hint_y: 0.4
+        
+        Button:
+            size_hint_x: 0.2
+            background_normal: ''
+            background_color: danger_color
+            text: 'Remove'
+            color: 1, 1, 1, 1
+            on_press: app.root.remove_item(root.item_id)
+            canvas.before:
+                Color:
+                    rgba: self.background_color
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [5,]

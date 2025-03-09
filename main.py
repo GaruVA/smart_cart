@@ -2,10 +2,13 @@ import os
 
 # Disable Kivy's argument parser
 os.environ['KIVY_NO_ARGS'] = '1'
+# Disable Xinput warnings
+os.environ['KIVY_NO_XINPUT'] = '1'
 
 import time
 import threading
 from datetime import datetime
+from functools import partial
 
 # Kivy imports
 from kivy.app import App
@@ -20,10 +23,16 @@ from kivy.core.window import Window
 from kivy.lang import Builder
 from kivy.factory import Factory
 from kivy.properties import NumericProperty, StringProperty
+from kivy.animation import Animation
+from kivy.utils import get_color_from_hex
+from kivy.graphics import Color, Rectangle, RoundedRectangle
 
 # Local imports
 from utils.firebase_handler import FirebaseHandler
 from models.mock_sensors import MockUltrasonicSensor, MockLoadSensor, MockBarcodeScanner
+
+# Maximize the window on start
+Window.maximize()
 
 # Set window size to match typical Raspberry Pi touchscreen (800x480)
 Window.size = (800, 480)
@@ -40,6 +49,17 @@ class ItemWidget(BoxLayout):
     item_id = NumericProperty(0)
     item_name = StringProperty('')
     item_price = NumericProperty(0.0)
+    
+    def start_remove_animation(self, *args):
+        """Start animation for item removal"""
+        anim = Animation(opacity=0, height=0, duration=0.3)
+        # Store parent reference before animation starts
+        parent = self.parent
+        def remove_widget_safely(anim, widget):
+            if parent and widget in parent.children:
+                parent.remove_widget(widget)
+        anim.bind(on_complete=remove_widget_safely)
+        anim.start(self)
 
 # Register with Factory so it can be used in the kv file
 Factory.register('ItemWidget', cls=ItemWidget)
@@ -102,58 +122,130 @@ class CartScreen(BoxLayout):
     
     def show_barcode_input(self):
         """Show popup for entering barcode manually (for development)"""
-        content = BoxLayout(orientation='vertical', padding=10, spacing=5)
+        content = BoxLayout(orientation='vertical', padding=15, spacing=15)
         
-        input_label = Label(text='Enter barcode:', size_hint_y=None, height=30)
-        input_field = TextInput(multiline=False, size_hint_y=None, height=40)
+        # Title with divider
+        title_box = BoxLayout(orientation='vertical', size_hint_y=None, height='60dp')
+        title_label = Label(
+            text='Scan Product',
+            font_size='24sp',
+            size_hint_y=None,
+            height='40dp',
+            color=get_color_from_hex('#212121'),
+            bold=True
+        )
         
-        # Get sample barcodes from the firebase handler
-        sample_barcodes = self.firebase.get_available_barcodes(limit=5)
+        # Add divider
+        with title_box.canvas.after:
+            Color(rgba=get_color_from_hex('#E0E0E0'))
+            Rectangle(pos=(title_box.x, title_box.y), size=(title_box.width, 1))
+            
+        title_box.add_widget(title_label)
+        content.add_widget(title_box)
         
-        # Create sample barcode buttons
-        samples_box = BoxLayout(orientation='vertical', spacing=2, size_hint_y=None, height=120)
-        samples_title = Label(text='Sample barcodes:', size_hint_y=None, height=20, halign='left')
+        # Input section with background
+        input_container = BoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            height='100dp',
+            padding=10
+        )
+        
+        with input_container.canvas.before:
+            Color(rgba=get_color_from_hex('#F5F5F5'))
+            RoundedRectangle(pos=input_container.pos, size=input_container.size, radius=[5,])
+        
+        input_label = Label(
+            text='Enter barcode:',
+            size_hint_y=None,
+            height='30dp',
+            color=get_color_from_hex('#212121'),
+            halign='left'
+        )
+        input_label.bind(size=input_label.setter('text_size'))
+        
+        input_field = Factory.CustomInput()
+        
+        input_container.add_widget(input_label)
+        input_container.add_widget(input_field)
+        content.add_widget(input_container)
+        
+        # Sample barcodes section with background
+        samples_container = BoxLayout(
+            orientation='vertical',
+            padding=10,
+            spacing=5
+        )
+        
+        with samples_container.canvas.before:
+            Color(rgba=get_color_from_hex('#F5F5F5'))
+            RoundedRectangle(pos=samples_container.pos, size=samples_container.size, radius=[5,])
+        
+        samples_title = Label(
+            text='Available Products:',
+            size_hint_y=None,
+            height='30dp',
+            color=get_color_from_hex('#212121'),
+            halign='left',
+            bold=True
+        )
         samples_title.bind(size=samples_title.setter('text_size'))
-        samples_box.add_widget(samples_title)
+        samples_container.add_widget(samples_title)
         
         # Create a grid for the sample buttons
         from kivy.uix.gridlayout import GridLayout
-        barcode_grid = GridLayout(cols=2, spacing=4, size_hint_y=None)
+        barcode_grid = GridLayout(
+            cols=2,
+            spacing=10,
+            size_hint_y=None,
+            padding=[0, 10, 0, 0]
+        )
         barcode_grid.bind(minimum_height=barcode_grid.setter('height'))
         
+        # Get sample barcodes
+        sample_barcodes = self.firebase.get_available_barcodes(limit=6)
+        
         for barcode in sample_barcodes:
-            barcode_btn = Button(
-                text=barcode, 
-                size_hint_y=None, 
-                height=30
-            )
-            barcode_grid.add_widget(barcode_btn)
+            btn = Factory.SampleBarcodeButton(text=barcode)
+            barcode_grid.add_widget(btn)
             
-            # Bind to set the text field when clicked
             def create_callback(barcode_text):
                 return lambda instance: setattr(input_field, 'text', barcode_text)
-            barcode_btn.bind(on_press=create_callback(barcode))
+            btn.bind(on_press=create_callback(barcode))
         
-        # Add grid to samples box
-        samples_box.add_widget(barcode_grid)
+        samples_container.add_widget(barcode_grid)
+        content.add_widget(samples_container)
         
-        buttons = BoxLayout(size_hint_y=None, height=50, spacing=10)
-        random_btn = Button(text='Random')
-        scan_btn = Button(text='Scan')
-        cancel_btn = Button(text='Cancel')
+        # Action buttons
+        buttons = BoxLayout(size_hint_y=None, height='50dp', spacing=10)
         
+        cancel_btn = Factory.CustomButton(
+            text='Cancel',
+            background_color=get_color_from_hex('#9E9E9E')
+        )
+        random_btn = Factory.CustomButton(
+            text='Random',
+            background_color=get_color_from_hex('#2196F3')
+        )
+        scan_btn = Factory.CustomButton(
+            text='Add to Cart',
+            background_color=get_color_from_hex('#4CAF50')
+        )
+        
+        buttons.add_widget(cancel_btn)
         buttons.add_widget(random_btn)
         buttons.add_widget(scan_btn)
-        buttons.add_widget(cancel_btn)
         
-        content.add_widget(input_label)
-        content.add_widget(input_field)
-        content.add_widget(samples_box)
         content.add_widget(buttons)
         
-        popup = Popup(title='Scan Item', content=content, size_hint=(0.8, 0.6))
+        popup = Factory.CustomPopup(
+            title='',
+            content=content,
+            size_hint=(None, None),
+            size=('400dp', '450dp'),
+            auto_dismiss=False
+        )
         
-        # Bind actions
         def on_scan(btn):
             barcode = input_field.text.strip()
             if barcode:
@@ -168,10 +260,15 @@ class CartScreen(BoxLayout):
         random_btn.bind(on_press=on_random)
         cancel_btn.bind(on_press=popup.dismiss)
         
+        # Start with fade in animation
+        content.opacity = 0
         popup.open()
+        
+        anim = Animation(opacity=1, duration=0.2)
+        anim.start(content)
     
     def process_scanned_barcode(self, barcode):
-        """Process a scanned barcode"""
+        """Process a scanned barcode with animation"""
         product = self.firebase.get_product_by_barcode(barcode)
         
         if product:
@@ -182,11 +279,59 @@ class CartScreen(BoxLayout):
             if 'weight' in product:
                 self.weight_sensor.add_item(product['weight'])
             
+            # Create and add new item widget with animation
+            item_widget = ItemWidget(
+                opacity=0,
+                item_id=self.shopping_cart.next_id - 1,
+                item_name=product['name'],
+                item_price=product['price']
+            )
+            self.ids.item_list.add_widget(item_widget)
+            
+            # Animate the new item appearing
+            anim = Animation(opacity=1, duration=0.3)
+            anim.start(item_widget)
+            
             # Update UI
             self.update_cart_display()
             
+            # Show success message
+            self.show_toast(f"Added {product['name']}")
+            
             # Update connection status in case network state changed
             self.update_connection_status(0)
+    
+    def show_toast(self, message, duration=1):
+        """Show a temporary message toast"""
+        toast = Label(
+            text=message,
+            size_hint=(None, None),
+            pos_hint={'center_x': 0.5, 'y': 0.1},
+            font_size='16sp',
+            color=(1, 1, 1, 1),
+            padding=(20, 10)
+        )
+        toast.bind(texture_size=toast.setter('size'))
+        
+        # Add background
+        with toast.canvas.before:
+            Color(0.2, 0.2, 0.2, 0.8)
+            Rectangle(pos=toast.pos, size=toast.size)
+        
+        # Add to window
+        Window.add_widget(toast)
+        
+        # Animate in
+        toast.opacity = 0
+        anim = Animation(opacity=1, duration=0.2) + \
+               Animation(opacity=1, duration=duration) + \
+               Animation(opacity=0, duration=0.2)
+        
+        def remove_toast(*args):
+            Window.remove_widget(toast)
+            
+        anim.bind(on_complete=remove_toast)
+        anim.start(toast)
     
     def update_cart_display(self):
         """Update the UI with cart contents"""
@@ -214,19 +359,36 @@ class CartScreen(BoxLayout):
             self.ids.item_list.add_widget(item_widget)
     
     def remove_item(self, item_id):
-        """Remove item from the cart"""
-        item = self.shopping_cart.items.get(item_id)
+        """Remove item from cart with animation"""
+        item_widgets = [w for w in self.ids.item_list.children if isinstance(w, ItemWidget) and w.item_id == item_id]
+        if item_widgets:
+            item_widget = item_widgets[0]
+            item = self.shopping_cart.items.get(item_id)
+            
+            if item:
+                # Start remove animation
+                item_widget.start_remove_animation()
+                
+                # Remove from shopping cart after animation
+                Clock.schedule_once(
+                    lambda dt: self._complete_item_removal(item_id, item),
+                    0.3
+                )
+    
+    def _complete_item_removal(self, item_id, item):
+        """Complete the item removal after animation"""
+        # Remove from shopping cart
+        self.shopping_cart.remove_item(item_id)
         
-        if item:
-            # Remove from shopping cart
-            self.shopping_cart.remove_item(item_id)
-            
-            # Update weight simulation
-            if 'weight' in item:
-                self.weight_sensor.remove_item(item['weight'])
-            
-            # Update UI
-            self.update_cart_display()
+        # Update weight simulation
+        if 'weight' in item:
+            self.weight_sensor.remove_item(item['weight'])
+        
+        # Update UI
+        self.update_cart_display()
+        
+        # Show removed message
+        self.show_toast(f"Removed {item['name']}")
     
     def update_sensor_display(self, dt):
         """Update display with sensor data (called by Clock)"""
@@ -251,7 +413,8 @@ class CartScreen(BoxLayout):
     
     def show_checkout_popup(self, session_id):
         """Display checkout information"""
-        content = BoxLayout(orientation='vertical', padding=10)
+        # Make popup smaller to fit screen better
+        content = BoxLayout(orientation='vertical', padding=10, spacing=5)
         
         # Session info
         total = self.shopping_cart.get_total()
@@ -260,33 +423,62 @@ class CartScreen(BoxLayout):
         # Format session ID to make it more readable
         if session_id.startswith("offline-session"):
             session_display = "OFFLINE-" + session_id[-6:]
-            full_session_id = session_id  # Offline ID is already the full ID
+            full_session_id = session_id
         else:
-            # For Firebase IDs, we're just showing the last part for display purposes
-            # The full ID is still stored in Firestore
             session_display = session_id[-8:] if len(session_id) > 8 else session_id
-            full_session_id = session_id  # Store the full Firebase ID
+            full_session_id = session_id
+        
+        # Header with completion animation - reduced height
+        header_box = BoxLayout(orientation='vertical', size_hint_y=None, height='70dp')
+        
+        # Checkmark symbol
+        checkmark = Label(
+            text='✓',
+            font_size='36sp',  # Reduced font size
+            color=get_color_from_hex('#4CAF50'),
+            size_hint_y=None,
+            height='40dp',  # Reduced height
+            opacity=0
+        )
         
         header_label = Label(
             text="Checkout Complete",
-            font_size=24,
-            size_hint_y=0.2
+            font_size='20sp',  # Reduced font size
+            color=get_color_from_hex('#212121'),
+            size_hint_y=None,
+            height='30dp',  # Reduced height
+            bold=True,
+            opacity=0
         )
-        content.add_widget(header_label)
+        
+        header_box.add_widget(checkmark)
+        header_box.add_widget(header_label)
+        content.add_widget(header_box)
         
         # Generate QR code for session ID
         from kivy.core.image import Image as CoreImage
         from io import BytesIO
         import qrcode
         
-        # Create QR code
+        # QR code container with border - reduced height
+        qr_container = BoxLayout(
+            orientation='vertical',
+            padding=5,
+            size_hint_y=None,
+            height=180  # Reduced height
+        )
+        
+        with qr_container.canvas.before:
+            Color(rgba=get_color_from_hex('#E0E0E0'))
+            Rectangle(pos=qr_container.pos, size=qr_container.size)
+        
         try:
-            # Generate QR code with session ID
+            # Generate QR code with session ID - smaller box size
             qr = qrcode.QRCode(
                 version=1,
                 error_correction=qrcode.constants.ERROR_CORRECT_L,
-                box_size=10,
-                border=4,
+                box_size=8,  # Reduced box size
+                border=2,    # Reduced border
             )
             qr.add_data(full_session_id)
             qr.make(fit=True)
@@ -304,80 +496,206 @@ class CartScreen(BoxLayout):
             
             # Use an Image widget instead of Label for QR display
             from kivy.uix.image import Image
-            qr_image = Image(texture=qr_texture, size_hint=(1, None), height=200)
+            qr_image = Image(
+                texture=qr_texture,
+                size_hint=(None, None),
+                size=(170, 170),  # Fixed size for QR
+                pos_hint={'center_x': 0.5},
+                opacity=0
+            )
         except Exception as e:
-            # Fallback to text if QR generation fails
             print(f"QR code generation failed: {e}")
             qr_image = Label(
                 text="[Checkout Barcode]",
-                font_size=24,
-                size_hint_y=0.2
+                font_size='20sp',
+                size_hint_y=None,
+                height=170,
+                opacity=0
             )
         
-        # Session summary
-        summary_text = f"Total Amount: ${total:.2f}\n"
-        summary_text += f"Items: {items_count}\n\n"
-        summary_text += f"Session ID: {session_display}"
+        qr_container.add_widget(qr_image)
+        content.add_widget(qr_container)
         
-        if full_session_id != session_display:
-            summary_text += f"\n(Shortened from {full_session_id})"
+        # Session summary in a bordered container - reduced height and padding
+        summary_box = BoxLayout(
+            orientation='vertical',
+            padding=10,
+            spacing=2,
+            size_hint_y=None,
+            height=120  # Reduced height
+        )
         
+        with summary_box.canvas.before:
+            Color(rgba=get_color_from_hex('#F5F5F5'))
+            RoundedRectangle(pos=summary_box.pos, size=summary_box.size, radius=[5,])
+        
+        total_label = Label(
+            text=f"Total Amount: ${total:.2f}",
+            color=get_color_from_hex('#212121'),
+            font_size='18sp',  # Reduced font size
+            bold=True,
+            size_hint_y=None,
+            height='35dp',  # Reduced height
+            opacity=0
+        )
+        
+        items_label = Label(
+            text=f"Items: {items_count}",
+            color=get_color_from_hex('#757575'),
+            font_size='16sp',
+            size_hint_y=None,
+            height='25dp',  # Reduced height
+            opacity=0
+        )
+        
+        session_label = Label(
+            text=f"Session ID: {session_display}",
+            color=get_color_from_hex('#757575'),
+            font_size='16sp',
+            size_hint_y=None,
+            height='25dp',  # Reduced height
+            opacity=0
+        )
+        
+        # Add offline mode indicator if applicable
         if session_id.startswith("offline"):
-            summary_text += "\n\n(Running in offline mode)"
+            offline_label = Label(
+                text="(Running in offline mode)",
+                color=get_color_from_hex('#F44336'),
+                font_size='14sp',
+                size_hint_y=None,
+                height='25dp',  # Reduced height
+                opacity=0
+            )
+            summary_box.add_widget(offline_label)
         
-        info_label = Label(
-            text=summary_text,
-            halign='center',
-            valign='middle',
-            size_hint_y=0.5
-        )
-        content.add_widget(info_label)
+        summary_box.add_widget(total_label)
+        summary_box.add_widget(items_label)
+        summary_box.add_widget(session_label)
+        content.add_widget(summary_box)
         
-        # Add QR code to the popup
-        content.add_widget(qr_image)
-        
-        # Close button
-        close_btn = Button(
+        # Done button - reduced height
+        done_btn = Factory.CustomButton(
             text="Done",
-            size_hint=(0.8, 0.2),
-            pos_hint={'center_x': 0.5}
+            size_hint=(0.8, None),
+            height='40dp',  # Reduced height
+            pos_hint={'center_x': 0.5},
+            opacity=0
         )
-        content.add_widget(close_btn)
+        content.add_widget(done_btn)
         
-        popup = Popup(
-            title="Ready for Checkout",
+        # Create and show popup with adjusted size
+        popup = Factory.CustomPopup(
+            title='',
             content=content,
-            size_hint=(0.8, 0.8),
+            size_hint=(None, None),  # Fixed size instead of proportion
+            size=(400, 450),  # Fixed size to fit small screen
             auto_dismiss=False
         )
         
-        # When closed, reset cart
-        def on_close(instance):
-            popup.dismiss()
-            self.shopping_cart.clear()
-            self.weight_sensor.tare()
-            self.update_cart_display()
+        # Animations for elements appearing
+        def start_animations(dt):
+            # Checkmark and header
+            anim1 = Animation(opacity=1, duration=0.3)
+            anim1.start(checkmark)
+            anim2 = Animation(opacity=1, duration=0.3, d=0.2)
+            anim2.start(header_label)
             
-        close_btn.bind(on_press=on_close)
+            # QR code
+            anim3 = Animation(opacity=1, duration=0.3, d=0.4)
+            anim3.start(qr_image)
+            
+            # Summary info
+            anim4 = Animation(opacity=1, duration=0.3, d=0.6)
+            anim4.start(total_label)
+            anim5 = Animation(opacity=1, duration=0.3, d=0.7)
+            anim5.start(items_label)
+            anim6 = Animation(opacity=1, duration=0.3, d=0.8)
+            anim6.start(session_label)
+            
+            if session_id.startswith("offline"):
+                anim7 = Animation(opacity=1, duration=0.3, d=0.9)
+                anim7.start(offline_label)
+            
+            # Done button
+            anim8 = Animation(opacity=1, duration=0.3, d=1.0)
+            anim8.start(done_btn)
+        
+        # Schedule animations to start after popup is shown
+        Clock.schedule_once(start_animations, 0.1)
+        
+        def on_close(instance):
+            # Fade out animation before closing
+            def finish_close(dt):
+                popup.dismiss()
+                self.shopping_cart.clear()
+                self.weight_sensor.tare()
+                self.update_cart_display()
+                
+            anim = Animation(opacity=0, duration=0.2)
+            anim.bind(on_complete=lambda *x: Clock.schedule_once(finish_close, 0))
+            anim.start(content)
+            
+        done_btn.bind(on_press=on_close)
         popup.open()
     
     def show_message_popup(self, title, message):
-        """Display a simple message popup"""
-        content = BoxLayout(orientation='vertical', padding=10)
-        content.add_widget(Label(text=message))
+        """Display a simple message popup with Material Design styling"""
+        content = BoxLayout(orientation='vertical', padding=20, spacing=10)
         
-        btn = Button(text="OK", size_hint=(1.0, 0.3))
-        content.add_widget(btn)
+        # Title
+        title_label = Label(
+            text=title,
+            font_size='20sp',
+            color=get_color_from_hex('#212121'),
+            size_hint_y=None,
+            height='40dp',
+            bold=True
+        )
         
-        popup = Popup(
-            title=title,
+        # Message
+        message_label = Label(
+            text=message,
+            font_size='16sp',
+            color=get_color_from_hex('#757575'),
+            size_hint_y=None,
+            height='60dp'
+        )
+        
+        # OK button
+        ok_btn = Factory.CustomButton(
+            text="OK",
+            size_hint=(0.5, None),
+            height='50dp',
+            pos_hint={'center_x': 0.5}
+        )
+        
+        content.add_widget(title_label)
+        content.add_widget(message_label)
+        content.add_widget(ok_btn)
+        
+        popup = Factory.CustomPopup(
+            title='',
             content=content,
-            size_hint=(0.5, 0.3),
+            size_hint=(0.8, None),
+            height='200dp',
             auto_dismiss=True
         )
         
-        btn.bind(on_press=popup.dismiss)
+        def on_close(instance):
+            # Fade out animation before closing
+            anim = Animation(opacity=0, duration=0.2)
+            anim.bind(on_complete=lambda *x: popup.dismiss())
+            anim.start(content)
+            
+        ok_btn.bind(on_press=on_close)
+        
+        # Start with 0 opacity and fade in
+        content.opacity = 0
         popup.open()
+        
+        anim = Animation(opacity=1, duration=0.2)
+        anim.start(content)
         
     def on_stop(self):
         """Clean up when app is closing"""
