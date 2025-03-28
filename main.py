@@ -18,6 +18,7 @@ from kivy.uix.button import Button
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 from kivy.uix.popup import Popup
+from kivy.uix.widget import Widget
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.lang import Builder
@@ -341,10 +342,13 @@ class CartScreen(BoxLayout):
         
         if item_count == 0:
             self.ids.total_label.text = "Cart Empty - Ready to Scan"
+            self.ids.total_label.color = get_color_from_hex('#2196F3')  # Set blue color
         elif item_count == 1:
             self.ids.total_label.text = f"Total: ${total:.2f} (1 item)"
+            self.ids.total_label.color = (1, 1, 1, 1)  # Reset to white
         else:
             self.ids.total_label.text = f"Total: ${total:.2f} ({item_count} items)"
+            self.ids.total_label.color = (1, 1, 1, 1)  # Reset to white
         
         # Clear and rebuild items list
         self.ids.item_list.clear_widgets()
@@ -413,159 +417,119 @@ class CartScreen(BoxLayout):
     
     def show_checkout_popup(self, session_id):
         """Display checkout information"""
-        # Make popup smaller to fit screen better
-        content = BoxLayout(orientation='vertical', padding=10, spacing=5)
-        
-        # Session info
+        # Get session data for display
         total = self.shopping_cart.get_total()
         items_count = len(self.shopping_cart.items)
+        session_display = session_id[-8:] if len(session_id) > 8 else session_id
         
-        # Format session ID to make it more readable
-        if session_id.startswith("offline-session"):
-            session_display = "OFFLINE-" + session_id[-6:]
-            full_session_id = session_id
-        else:
-            session_display = session_id[-8:] if len(session_id) > 8 else session_id
-            full_session_id = session_id
+        content = BoxLayout(orientation='vertical', padding=10, spacing=8)
         
-        # Header with completion animation - reduced height
-        header_box = BoxLayout(orientation='vertical', size_hint_y=None, height='70dp')
-        
-        # Checkmark symbol
-        checkmark = Label(
-            text='✓',
-            font_size='36sp',  # Reduced font size
-            color=get_color_from_hex('#4CAF50'),
-            size_hint_y=None,
-            height='40dp',  # Reduced height
-            opacity=0
-        )
-        
+        # Header with title - simplified
         header_label = Label(
             text="Checkout Complete",
-            font_size='20sp',  # Reduced font size
-            color=get_color_from_hex('#2196F3'),  # Changed to primary blue color
+            font_size='18sp',
+            color=get_color_from_hex('#2196F3'),
             size_hint_y=None,
-            height='30dp',  # Reduced height
-            bold=True,
-            opacity=0
+            height='5dp',
+            bold=True
         )
-        
-        header_box.add_widget(checkmark)
-        header_box.add_widget(header_label)
-        content.add_widget(header_box)
+        content.add_widget(header_label)
         
         # Generate QR code for session ID
         from kivy.core.image import Image as CoreImage
         from io import BytesIO
         import qrcode
         
-        # QR code container with border - reduced height
+        # QR code container with adjusted padding
         qr_container = BoxLayout(
             orientation='vertical',
-            padding=5,
+            padding=8,
             size_hint_y=None,
-            height=180  # Reduced height
+            height=180,
+            pos_hint={'center_x': 0.5}
         )
         
-        with qr_container.canvas.before:
-            Color(rgba=get_color_from_hex('#E0E0E0'))
-            Rectangle(pos=qr_container.pos, size=qr_container.size)
-        
         try:
-            # Generate QR code with session ID - smaller box size
+            # Generate QR code with session ID
             qr = qrcode.QRCode(
                 version=1,
                 error_correction=qrcode.constants.ERROR_CORRECT_L,
-                box_size=8,  # Reduced box size
-                border=2,    # Reduced border
+                box_size=6,
+                border=2,
             )
-            qr.add_data(full_session_id)
+            qr.add_data(session_id)  # Use session_id directly
             qr.make(fit=True)
             
             # Create an image from the QR code
             qr_img = qr.make_image(fill_color="black", back_color="white")
             
-            # Save QR to bytes buffer
             buffer = BytesIO()
             qr_img.save(buffer, format="PNG")
             buffer.seek(0)
             
-            # Create Kivy image from buffer
             qr_texture = CoreImage(BytesIO(buffer.read()), ext="png").texture
             
-            # Use an Image widget instead of Label for QR display
             from kivy.uix.image import Image
             qr_image = Image(
                 texture=qr_texture,
                 size_hint=(None, None),
-                size=(170, 170),  # Fixed size for QR
-                pos_hint={'center_x': 0.5},
-                opacity=0
+                size=(150, 150),
+                pos_hint={'center_x': 0.5}
             )
+            qr_container.add_widget(qr_image)
         except Exception as e:
             print(f"QR code generation failed: {e}")
             qr_image = Label(
                 text="[Checkout Barcode]",
-                font_size='20sp',
+                font_size='18sp',
                 size_hint_y=None,
-                height=170,
-                opacity=0
+                height=150
             )
+            qr_container.add_widget(qr_image)
         
-        qr_container.add_widget(qr_image)
         content.add_widget(qr_container)
         
-        # Session summary in a bordered container - reduced height and padding
+        # Session summary - reduced spacing
         summary_box = BoxLayout(
             orientation='vertical',
-            padding=10,
-            spacing=2,
+            padding=8,  # Reduced padding
+            spacing=4,  # Reduced spacing
             size_hint_y=None,
-            height=120  # Reduced height
+            height=100  # Reduced height
         )
-        
-        with summary_box.canvas.before:
-            Color(rgba=get_color_from_hex('#F5F5F5'))
-            RoundedRectangle(pos=summary_box.pos, size=summary_box.size, radius=[5,])
         
         total_label = Label(
             text=f"Total Amount: ${total:.2f}",
-            color=get_color_from_hex('#2196F3'),  # Changed to primary blue color
-            font_size='18sp',  # Reduced font size
+            color=get_color_from_hex('#2196F3'),
+            font_size='16sp',  # Reduced font
             bold=True,
             size_hint_y=None,
-            height='35dp',  # Reduced height
-            opacity=0
+            height='30dp'  # Reduced height
         )
         
         items_label = Label(
             text=f"Items: {items_count}",
             color=get_color_from_hex('#757575'),
-            font_size='16sp',
+            font_size='14sp',  # Reduced font
             size_hint_y=None,
-            height='25dp',  # Reduced height
-            opacity=0
+            height='25dp'  # Reduced height
         )
         
         session_label = Label(
             text=f"Session ID: {session_display}",
             color=get_color_from_hex('#757575'),
-            font_size='16sp',
+            font_size='14sp',  # Reduced font
             size_hint_y=None,
-            height='25dp',  # Reduced height
-            opacity=0
+            height='25dp'  # Reduced height
         )
         
-        # Add offline mode indicator if applicable
         if session_id.startswith("offline"):
             offline_label = Label(
                 text="(Running in offline mode)",
                 color=get_color_from_hex('#F44336'),
-                font_size='14sp',
+                font_size='12sp',  # Reduced font
                 size_hint_y=None,
-                height='25dp',  # Reduced height
-                opacity=0
+                height='20dp'  # Reduced height
             )
             summary_box.add_widget(offline_label)
         
@@ -574,80 +538,46 @@ class CartScreen(BoxLayout):
         summary_box.add_widget(session_label)
         content.add_widget(summary_box)
         
-        # Done button - reduced height
+        # Done button with minimal spacing
         done_btn = Factory.CustomButton(
             text="Done",
-            size_hint=(0.8, None),
+            size_hint=(0.6, None),  # Reduced width
             height='40dp',  # Reduced height
-            pos_hint={'center_x': 0.5},
-            opacity=0
+            pos_hint={'center_x': 0.5}
         )
+        
+        # Minimal spacing before button
+        spacing_widget = Widget(size_hint_y=None, height='8dp')  # Reduced spacing
+        content.add_widget(spacing_widget)
         content.add_widget(done_btn)
         
         # Create and show popup with adjusted size
         popup = Factory.CustomPopup(
             title='',
             content=content,
-            size_hint=(None, None),  # Fixed size instead of proportion
-            size=(400, 450),  # Fixed size to fit small screen
+            size_hint=(None, None),
+            size=(350, 400),  # Reduced size
             auto_dismiss=False
         )
         
-        # Animations for elements appearing
-        def start_animations(dt):
-            # Checkmark and header
-            anim1 = Animation(opacity=1, duration=0.3)
-            anim1.start(checkmark)
-            anim2 = Animation(opacity=1, duration=0.3, d=0.2)
-            anim2.start(header_label)
-            
-            # QR code
-            anim3 = Animation(opacity=1, duration=0.3, d=0.4)
-            anim3.start(qr_image)
-            
-            # Summary info
-            anim4 = Animation(opacity=1, duration=0.3, d=0.6)
-            anim4.start(total_label)
-            anim5 = Animation(opacity=1, duration=0.3, d=0.7)
-            anim5.start(items_label)
-            anim6 = Animation(opacity=1, duration=0.3, d=0.8)
-            anim6.start(session_label)
-            
-            if session_id.startswith("offline"):
-                anim7 = Animation(opacity=1, duration=0.3, d=0.9)
-                anim7.start(offline_label)
-            
-            # Done button
-            anim8 = Animation(opacity=1, duration=0.3, d=1.0)
-            anim8.start(done_btn)
-        
-        # Schedule animations to start after popup is shown
-        Clock.schedule_once(start_animations, 0.1)
-        
         def on_close(instance):
-            # Fade out animation before closing
-            def finish_close(dt):
-                popup.dismiss()
-                self.shopping_cart.clear()
-                self.weight_sensor.tare()
-                self.update_cart_display()
-                
-            anim = Animation(opacity=0, duration=0.2)
-            anim.bind(on_complete=lambda *x: Clock.schedule_once(finish_close, 0))
-            anim.start(content)
+            popup.dismiss()
+            self.shopping_cart.clear()
+            self.weight_sensor.tare()
+            self.update_cart_display()
             
         done_btn.bind(on_press=on_close)
         popup.open()
     
     def show_message_popup(self, title, message):
         """Display a simple message popup with Material Design styling"""
-        content = BoxLayout(orientation='vertical', padding=20, spacing=10)
+        content = BoxLayout(orientation='vertical', padding=12, spacing=8)
         
-        # Title
+        # Title with updated styling
         title_label = Label(
             text=title,
-            font_size='20sp',
-            color=get_color_from_hex('#212121'),
+            font_size='18sp',
+            color=get_color_from_hex('#2196F3'),
             size_hint_y=None,
             height='40dp',
             bold=True
@@ -656,17 +586,17 @@ class CartScreen(BoxLayout):
         # Message
         message_label = Label(
             text=message,
-            font_size='16sp',
+            font_size='14sp',
             color=get_color_from_hex('#757575'),
             size_hint_y=None,
-            height='60dp'
+            height='45dp'
         )
         
         # OK button
         ok_btn = Factory.CustomButton(
             text="OK",
-            size_hint=(0.5, None),
-            height='50dp',
+            size_hint=(0.4, None),
+            height='40dp',
             pos_hint={'center_x': 0.5}
         )
         
@@ -677,20 +607,18 @@ class CartScreen(BoxLayout):
         popup = Factory.CustomPopup(
             title='',
             content=content,
-            size_hint=(0.8, None),
-            height='200dp',
+            size_hint=(None, None),
+            size=(300, 160),
             auto_dismiss=True
         )
         
         def on_close(instance):
-            # Fade out animation before closing
             anim = Animation(opacity=0, duration=0.2)
             anim.bind(on_complete=lambda *x: popup.dismiss())
             anim.start(content)
             
         ok_btn.bind(on_press=on_close)
         
-        # Start with 0 opacity and fade in
         content.opacity = 0
         popup.open()
         

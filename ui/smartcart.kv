@@ -82,14 +82,14 @@
 
     BoxLayout:
         orientation: 'vertical'
-        padding: '8dp'  # Reduced padding
-        spacing: '8dp'  # Reduced spacing
+        padding: '12dp'  # Adjusted main padding
+        spacing: '12dp'  # Adjusted main spacing
         
         # Top section - Running total and hidden connection status
         BoxLayout:
             size_hint_y: None
             height: '50dp'  # Reduced from 60dp
-            padding: '5dp'
+            padding: '12dp'  # Increased padding
             canvas.before:
                 Color:
                     rgba: get_color_from_hex('#FFFFFF')
@@ -123,6 +123,7 @@
         # Middle section - Scrollable list of items
         BoxLayout:
             orientation: 'vertical'
+            padding: '8dp'  # Added padding to container
             canvas.before:
                 Color:
                     rgba: get_color_from_hex('#FFFFFF')
@@ -147,14 +148,14 @@
                     cols: 1
                     size_hint_y: None
                     height: self.minimum_height
-                    spacing: '5dp'
-                    padding: '10dp'
+                    spacing: '8dp'  # Adjusted spacing between items
+                    padding: '12dp'  # Increased padding
         
         # Bottom section - Checkout button only
         BoxLayout:
             size_hint_y: None
             height: '50dp'  # Reduced from 60dp
-            spacing: '10dp'
+            spacing: '12dp'  # Increased spacing
             
             Widget:
                 size_hint_x: 0.3
@@ -181,8 +182,8 @@
     orientation: 'vertical'
     size_hint_y: None
     height: '70dp'  # Reduced from 80dp
-    padding: '5dp'
-    spacing: '2dp'
+    padding: '12dp'  # Increased padding
+    spacing: '4dp'  # Adjusted spacing
     canvas.before:
         Color:
             rgba: get_color_from_hex('#F5F5F5')
@@ -193,11 +194,12 @@
     
     BoxLayout:
         orientation: 'horizontal'
+        spacing: '8dp'  # Added spacing between elements
         
         BoxLayout:
             orientation: 'vertical'
             size_hint_x: 0.8
-            spacing: '2dp'
+            spacing: '4dp'  # Adjusted spacing between labels
             
             Label:
                 text: f"{root.item_name}"
