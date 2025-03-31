@@ -30,6 +30,13 @@ from kivy.graphics import Color, Rectangle, RoundedRectangle
 
 # Local imports
 from utils.firebase_handler import FirebaseHandler
+
+# Import real sensors instead of mock sensors
+from models.ultrasonic_sensor import UltrasonicSensor
+from models.load_sensor import LoadSensor
+from models.barcode_scanner import BarcodeScanner
+
+# For fallback to mock sensors when hardware is not available
 from models.mock_sensors import MockUltrasonicSensor, MockLoadSensor, MockBarcodeScanner
 
 # Maximize the window on start
@@ -72,14 +79,35 @@ class CartScreen(BoxLayout):
         super(CartScreen, self).__init__(**kwargs)
         self.shopping_cart = ShoppingCart()
         
-        # Initialize mock sensors for development
-        self.distance_sensor = MockUltrasonicSensor()
-        self.weight_sensor = MockLoadSensor()
-        self.barcode_scanner = MockBarcodeScanner()
-        
-        # Start sensor simulations
-        self.distance_sensor.start_simulation()
-        self.weight_sensor.start_simulation()
+        # Try to initialize real sensors with fallback to mock sensors
+        try:
+            # Define GPIO pins for ultrasonic sensors from test file
+            self.front_sensor = UltrasonicSensor(trig_pin=18, echo_pin=24)  # Front sensor
+            self.rear_sensor = UltrasonicSensor(trig_pin=23, echo_pin=25)   # Rear sensor
+            self.distance_sensor = self.front_sensor  # Use front sensor as the main one
+            print("Ultrasonic sensors initialized successfully")
+        except Exception as e:
+            print(f"Failed to initialize ultrasonic sensors: {e}. Using mock sensor instead.")
+            self.distance_sensor = MockUltrasonicSensor()
+            self.distance_sensor.start_simulation()
+            
+        try:
+            # Initialize load sensor with pins from load_sensor_test.py
+            self.weight_sensor = LoadSensor(dout_pin=5, pd_sck_pin=6)
+            self.weight_sensor.start_simulation()  # Start continuous reading
+            print("Load sensor initialized successfully")
+        except Exception as e:
+            print(f"Failed to initialize load sensor: {e}. Using mock sensor instead.")
+            self.weight_sensor = MockLoadSensor()
+            self.weight_sensor.start_simulation()
+            
+        try:
+            # Initialize barcode scanner
+            self.barcode_scanner = BarcodeScanner()
+            print("Barcode scanner initialized successfully")
+        except Exception as e:
+            print(f"Failed to initialize barcode scanner: {e}. Using mock scanner instead.")
+            self.barcode_scanner = MockBarcodeScanner()
         
         # Firebase handler for product data
         self.firebase = FirebaseHandler()
@@ -396,8 +424,19 @@ class CartScreen(BoxLayout):
     
     def update_sensor_display(self, dt):
         """Update display with sensor data (called by Clock)"""
-        distance = self.distance_sensor.read_distance()
-        weight = self.weight_sensor.read_weight()
+        # Update display with readings from real sensors
+        try:
+            distance = self.distance_sensor.read_distance()
+        except Exception as e:
+            print(f"Error reading distance: {e}")
+            distance = 0.0
+            
+        try:
+            weight = self.weight_sensor.read_weight()
+        except Exception as e:
+            print(f"Error reading weight: {e}")
+            weight = 0.0
+        
         self.ids.sensor_label.text = f"Distance: {distance:.1f} cm | Weight: {weight:.2f} kg"
     
     def end_session(self, instance=None):
@@ -627,8 +666,14 @@ class CartScreen(BoxLayout):
         
     def on_stop(self):
         """Clean up when app is closing"""
-        self.distance_sensor.stop_simulation()
-        self.weight_sensor.stop_simulation()
+        # Clean up sensors properly
+        if hasattr(self.distance_sensor, 'cleanup'):
+            self.distance_sensor.cleanup()
+        elif hasattr(self.distance_sensor, 'stop_simulation'):
+            self.distance_sensor.stop_simulation()
+            
+        if hasattr(self.weight_sensor, 'stop_simulation'):
+            self.weight_sensor.stop_simulation()
 
 
 class ShoppingCart:
@@ -688,9 +733,6 @@ class SmartCartApp(App):
     
     def build(self):
         self.firebase_handler = FirebaseHandler()
-        self.ultrasonic_sensor = MockUltrasonicSensor()
-        self.load_sensor = MockLoadSensor()
-        self.barcode_scanner = MockBarcodeScanner()
         self.title = 'Smart Shopping Cart'
         return CartScreen()
     
