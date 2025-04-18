@@ -3,26 +3,33 @@
 #:import get_color_from_hex kivy.utils.get_color_from_hex
 
 # Define custom colors
-#:set primary_color get_color_from_hex('#2196F3')  # Material Blue
-#:set success_color get_color_from_hex('#4CAF50')  # Material Green
-#:set danger_color get_color_from_hex('#F44336')   # Material Red
-#:set text_color get_color_from_hex('#212121')     # Dark Grey
-#:set bg_color get_color_from_hex('#FAFAFA')       # Light Grey
+#:set primary_color get_color_from_hex('#000000')  # Black
+#:set success_color get_color_from_hex('#000000')  # Black with green border
+#:set danger_color get_color_from_hex('#000000')   # Black with red border
+#:set text_color get_color_from_hex('#000000')     # Black
+#:set bg_color get_color_from_hex('#FFFFFF')       # White
+#:set border_green get_color_from_hex('#4CAF50')   # Green for borders
+#:set border_red get_color_from_hex('#F44336')     # Red for borders
 
 <CustomButton@Button>:
     background_normal: ''
-    background_color: primary_color
-    color: 1, 1, 1, 1
+    background_color: get_color_from_hex('#FFFFFF')  # White background
+    color: 0, 0, 0, 1  # Black text
     size_hint_y: None
-    height: '40dp'  # Reduced from 48dp
-    font_size: '16sp'  # Reduced from 18sp
+    height: '40dp'
+    font_size: '16sp'
     canvas.before:
         Color:
             rgba: self.background_color
-        RoundedRectangle:
+        Rectangle:  # Changed to Rectangle for sharp corners
             pos: self.pos
             size: self.size
-            radius: [5,]
+        # Add black border
+        Color:
+            rgba: primary_color
+        Line:
+            rectangle: [self.x, self.y, self.width, self.height]  # Changed to rectangle for sharp corners
+            width: 1.0  # Thinner border
 
 <CustomPopup@Popup>:
     background: ''
@@ -30,10 +37,15 @@
     canvas.before:
         Color:
             rgba: get_color_from_hex('#FFFFFF')
-        RoundedRectangle:
+        Rectangle:  # Changed to Rectangle for sharp corners
             pos: self.pos
             size: self.size
-            radius: [10,]
+        # Add black border
+        Color:
+            rgba: primary_color
+        Line:
+            rectangle: [self.x, self.y, self.width, self.height]  # Changed to rectangle for sharp corners
+            width: 1.0  # Thinner border
             
 <CustomInput@TextInput>:
     background_normal: ''
@@ -49,11 +61,16 @@
     hint_text_color: [0.5, 0.5, 0.5, 1]  # Lighter gray for hint text
     canvas.before:
         Color:
-            rgba: get_color_from_hex('#E0E0E0')
-        RoundedRectangle:
+            rgba: [1, 1, 1, 1]  # White background
+        Rectangle:  # Changed to Rectangle for sharp corners
             pos: self.pos
             size: self.size
-            radius: [5,]
+        # Add black border
+        Color:
+            rgba: primary_color
+        Line:
+            rectangle: [self.x, self.y, self.width, self.height]  # Changed to rectangle for sharp corners
+            width: 1.0  # Thinner border
 
 <SampleBarcodeButton@Button>:
     background_normal: ''
@@ -65,22 +82,21 @@
     bold: True
     canvas.before:
         Color:
-            rgba: self.background_color if self.state == 'normal' else get_color_from_hex('#E3F2FD')
-        RoundedRectangle:
+            rgba: get_color_from_hex('#FFFFFF')  # White background always
+        Rectangle:  # Changed to Rectangle for sharp corners
             pos: self.pos
             size: self.size
-            radius: [5,]
         # Add border
         Color:
             rgba: primary_color
         Line:
-            rounded_rectangle: [self.x, self.y, self.width, self.height, 5]
-            width: 1
+            rectangle: [self.x, self.y, self.width, self.height]  # Changed to rectangle for sharp corners
+            width: 1.0  # Thinner border
 
 <CartScreen>:
     canvas.before:
         Color:
-            rgba: get_color_from_hex('#FAFAFA')
+            rgba: get_color_from_hex('#FFFFFF') # White background
         Rectangle:
             pos: self.pos
             size: self.size
@@ -93,15 +109,20 @@
         # Top section - Running total and hidden connection status
         BoxLayout:
             size_hint_y: None
-            height: '50dp'  # Reduced from 60dp
-            padding: '12dp'  # Increased padding
+            height: '50dp'
+            padding: '12dp'
             canvas.before:
                 Color:
                     rgba: get_color_from_hex('#FFFFFF')
-                RoundedRectangle:
+                Rectangle:  # Changed to Rectangle for sharp corners
                     pos: self.pos
                     size: self.size
-                    radius: [5,]
+                # Add black border
+                Color:
+                    rgba: primary_color
+                Line:
+                    rectangle: [self.x, self.y, self.width, self.height]  # Changed to rectangle for sharp corners
+                    width: 1.0  # Thinner border
             
             # Hidden debug area (double tap to show scan dialog)
             Button:
@@ -112,9 +133,9 @@
             Label:
                 id: total_label
                 text: 'Total: $0.00'
-                font_size: '24sp'  # Reduced from 32sp
+                font_size: '24sp'
                 size_hint_x: 0.6
-                color: get_color_from_hex('#2196F3')  # Changed to primary blue color
+                color: primary_color  # Now black based on our new color definition
                 bold: True
                 
             # Connection status (small and subtle)
@@ -128,14 +149,19 @@
         # Middle section - Scrollable list of items
         BoxLayout:
             orientation: 'vertical'
-            padding: '8dp'  # Added padding to container
+            padding: '8dp'
             canvas.before:
                 Color:
                     rgba: get_color_from_hex('#FFFFFF')
-                RoundedRectangle:
+                Rectangle:  # Changed to Rectangle for sharp corners
                     pos: self.pos
                     size: self.size
-                    radius: [5,]
+                # Add black border
+                Color:
+                    rgba: primary_color
+                Line:
+                    rectangle: [self.x, self.y, self.width, self.height]  # Changed to rectangle for sharp corners
+                    width: 1.0  # Thinner border
                     
             Label:
                 text: 'Shopping Cart'
@@ -165,6 +191,18 @@
                     write_tab: False
                     focus: True
                     on_text_validate: app.process_barcode(self.text)
+                    canvas.before:
+                        Color:
+                            rgba: [1, 1, 1, 1]  # White background
+                        Rectangle:  # Changed to Rectangle for sharp corners
+                            pos: self.pos
+                            size: self.size
+                        # Add black border
+                        Color:
+                            rgba: primary_color
+                        Line:
+                            rectangle: [self.x, self.y, self.width, self.height]  # Changed to rectangle for sharp corners
+                            width: 1.0  # Thinner border
                 
                 CustomButton:
                     text: 'Add'
@@ -174,6 +212,10 @@
             ScrollView:
                 do_scroll_x: False
                 bar_width: '10dp'
+                bar_color: primary_color  # Black scroll bar
+                bar_inactive_color: [0.5, 0.5, 0.5, 0.5]  # Grey when inactive
+                effect_cls: 'ScrollEffect'  # Simple scroll effect
+                scroll_type: ['bars']  # Always show scroll bars
                 GridLayout:
                     id: item_list
                     cols: 1
@@ -195,7 +237,20 @@
                 text: 'Checkout'
                 size_hint_x: 0.4
                 on_press: app.checkout()
-                background_color: success_color
+                background_color: border_green  # Green background
+                color: 0, 0, 0, 1  # Black text
+                canvas.before:
+                    Color:
+                        rgba: self.background_color  # Using green background
+                    Rectangle:  # Changed to Rectangle for sharp corners
+                        pos: self.pos
+                        size: self.size
+                    # Add green border
+                    Color:
+                        rgba: primary_color  # Black border
+                    Line:
+                        rectangle: [self.x, self.y, self.width, self.height]  # Changed to rectangle for sharp corners
+                        width: 1.0  # Thinner border
                 
             Widget:
                 size_hint_x: 0.3
@@ -212,16 +267,21 @@
 <ItemWidget>:
     orientation: 'vertical'
     size_hint_y: None
-    height: '70dp'  # Reduced from 80dp
-    padding: '12dp'  # Increased padding
-    spacing: '4dp'  # Adjusted spacing
+    height: '70dp'
+    padding: '12dp'
+    spacing: '4dp'
     canvas.before:
         Color:
-            rgba: get_color_from_hex('#F5F5F5')
-        RoundedRectangle:
+            rgba: get_color_from_hex('#FFFFFF')  # White background
+        Rectangle:  # Changed to Rectangle for sharp corners
             pos: self.pos
             size: self.size
-            radius: [5,]
+        # Add black border
+        Color:
+            rgba: primary_color
+        Line:
+            rectangle: [self.x, self.y, self.width, self.height]  # Changed to rectangle for sharp corners
+            width: 1.0  # Thinner border
     
     BoxLayout:
         orientation: 'horizontal'
@@ -252,14 +312,19 @@
         Button:
             size_hint_x: 0.2
             background_normal: ''
-            background_color: danger_color
+            background_color: get_color_from_hex('#FFFFFF')  # White background
             text: 'Remove'
-            color: 1, 1, 1, 1
+            color: 0, 0, 0, 1  # Black text
             on_press: app.root.remove_item(root.item_id)
             canvas.before:
                 Color:
-                    rgba: self.background_color
-                RoundedRectangle:
+                    rgba: get_color_from_hex('#FFFFFF')  # White background
+                Rectangle:  # Changed to Rectangle for sharp corners
                     pos: self.pos
                     size: self.size
-                    radius: [5,]
+                # Add red border
+                Color:
+                    rgba: border_red
+                Line:
+                    rectangle: [self.x, self.y, self.width, self.height]  # Changed to rectangle for sharp corners
+                    width: 1.0  # Thinner border

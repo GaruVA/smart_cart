@@ -448,16 +448,26 @@ class CartScreen(BoxLayout):
         
         content = BoxLayout(orientation='vertical', padding=10, spacing=8)
         
-        # Header with title - simplified
+        # Header with payment instructions
         header_label = Label(
-            text="Checkout Complete",
+            text="Pay with PayPal",
             font_size='18sp',
-            color=get_color_from_hex('#2196F3'),
+            color=get_color_from_hex('#000000'),  # Changed to black to match theme
             size_hint_y=None,
-            height='5dp',
+            height='30dp',
             bold=True
         )
+        
+        instruction_label = Label(
+            text="Scan this QR code to complete your payment",
+            font_size='14sp',
+            color=get_color_from_hex('#000000'),  # Changed to black to match theme
+            size_hint_y=None,
+            height='25dp'
+        )
+        
         content.add_widget(header_label)
+        content.add_widget(instruction_label)
         
         # Generate QR code for session ID
         from kivy.core.image import Image as CoreImage
@@ -474,14 +484,31 @@ class CartScreen(BoxLayout):
         )
         
         try:
-            # Generate QR code with session ID
+            # Generate PayPal payment QR code with correct amount
+            # Format PayPal payment URL with the total amount
+            paypal_base_url = "https://www.paypal.com/qrcodes/p2merchant/"
+            
+            # Create a clean amount string (remove $ and ensure proper format)
+            amount_str = f"{total:.2f}"
+            
+            # PayPal URL parameters
+            # We include:
+            # - session_id as the invoice ID for tracking
+            # - total amount for payment
+            # - prefilled note with cart item count
+            paypal_params = f"?invoiceId={session_id}&amount={amount_str}&note=SmartCart%20Payment%20({items_count}%20items)"
+            
+            # Complete PayPal payment URL
+            paypal_payment_url = paypal_base_url + paypal_params
+            
+            # Generate QR code with PayPal payment URL
             qr = qrcode.QRCode(
                 version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                error_correction=qrcode.constants.ERROR_CORRECT_M,  # Medium error correction for payment QR
                 box_size=6,
                 border=2,
             )
-            qr.add_data(session_id)  # Use session_id directly
+            qr.add_data(paypal_payment_url)
             qr.make(fit=True)
             
             # Create an image from the QR code
@@ -524,7 +551,7 @@ class CartScreen(BoxLayout):
         
         total_label = Label(
             text=f"Total Amount: ${total:.2f}",
-            color=get_color_from_hex('#2196F3'),
+            color=get_color_from_hex('#000000'),  # Changed to black to match theme
             font_size='16sp',  # Reduced font
             bold=True,
             size_hint_y=None,
@@ -533,7 +560,7 @@ class CartScreen(BoxLayout):
         
         items_label = Label(
             text=f"Items: {items_count}",
-            color=get_color_from_hex('#757575'),
+            color=get_color_from_hex('#000000'),  # Changed to black to match theme
             font_size='14sp',  # Reduced font
             size_hint_y=None,
             height='25dp'  # Reduced height
@@ -541,7 +568,7 @@ class CartScreen(BoxLayout):
         
         session_label = Label(
             text=f"Session ID: {session_display}",
-            color=get_color_from_hex('#757575'),
+            color=get_color_from_hex('#000000'),  # Changed to black to match theme
             font_size='14sp',  # Reduced font
             size_hint_y=None,
             height='25dp'  # Reduced height
