@@ -1,96 +1,56 @@
 import RPi.GPIO as GPIO
 import time
-from hx711 import HX711  # Requires: pip3 install hx711py
-import threading
+from hx711 import HX711   # pip3 install hx711py
+
+# === USER CONFIGURATION ===
+DT_PIN = 5        # GPIO pin connected to HX711 DOUT
+SCK_PIN = 6       # GPIO pin connected to HX711 SCK
+CALIBRATION_FACTOR = 192.0761  # positive; negate if your readings are inverted
+INITIAL_READS = 50  # how many samples to average for initial tare
+LOOP_READS    = 5   # samples per weight reading
+SLEEP_TIME    = 0.5 # seconds between prints
+# ==========================
 
 class LoadSensor:
-    def __init__(self, dout_pin=5, pd_sck_pin=6):
-        """Initialize the load sensor with HX711 interface
-        
-        Args:
-            dout_pin: Data output pin (DT pin of HX711)
-            pd_sck_pin: Clock pin (SCK pin of HX711)
+    def __init__(self, dout=DT_PIN, pd_sck=SCK_PIN):
+        self.hx = HX711(dout_pin=dout, pd_sck_pin=pd_sck)
+        self.hx.reset()
+        self.baseline = None
+        self.calibration_factor = CALIBRATION_FACTOR
+
+    def setup_hx711(self):
         """
-        self.dout_pin = dout_pin
-        self.pd_sck_pin = pd_sck_pin
-        # Calibration factor (adjust based on load cell's sensitivity)
-        self.calibration_factor = 192.07609999999997
-        self.hx = None
-        self.tare_value = 0
-        self.weight = 0.0
-        self._running = False
-        self._thread = None
-        self._lock = threading.Lock()  # Thread safety for sensor readings
+        Initialize HX711, let it settle, and compute a baseline (tare) average.
+        Returns the raw baseline value.
+        """
+        self.hx.reset()
+        time.sleep(0.1)  # allow ADC to settle
         
-        # Initialize the sensor
-        self._setup_sensor()
-    
-    def _setup_sensor(self):
-        """Initialize the HX711 module and perform initial tare"""
-        try:
-            self.hx = HX711(dout_pin=self.dout_pin, pd_sck_pin=self.pd_sck_pin)
-            self.hx.reset()
-            self.tare_value = self._get_raw_average(10)  # Perform initial tare
-            print("Load sensor initialized successfully")
-        except Exception as e:
-            print(f"Error during load sensor setup: {e}")
-            self.hx = None
-    
-    def _get_raw_average(self, num_readings=5):
-        """Get the average of raw readings from the HX711"""
-        if not self.hx:
-            return 0
-            
-        try:
-            raw_data = self.hx.get_raw_data(times=num_readings)
-            if raw_data:
-                return sum(raw_data) / len(raw_data)
-            else:
-                print("Failed to get valid readings from load cell")
-                return 0
-        except Exception as e:
-            print(f"Error getting raw average from load cell: {e}")
-            return 0
-    
-    def start_simulation(self):
-        """Start continuous weight monitoring (for compatibility with mock sensor)"""
-        self._running = True
-        self._thread = threading.Thread(target=self._continuous_reading)
-        self._thread.daemon = True
-        self._thread.start()
+        print(f"Taring scale with {INITIAL_READS} readings... ", end="", flush=True)
+        raw_vals = self.hx.get_raw_data(times=INITIAL_READS)
+        if not raw_vals:
+            raise RuntimeError("Failed to read from HX711 during tare.")
+        self.baseline = sum(raw_vals) / len(raw_vals)
+        print(f"done (baseline={self.baseline:.1f}).")
         
-    def stop_simulation(self):
-        """Stop continuous monitoring (for compatibility with mock sensor)"""
-        self._running = False
-        if self._thread:
-            self._thread.join(timeout=1.0)
-    
-    def _continuous_reading(self):
-        """Continuously read weight in background thread"""
-        while self._running:
-            if self.hx:
-                with self._lock:
-                    self.weight = self.read_weight()
-            time.sleep(0.3)  # Read interval
-    
+        return self.baseline
+
     def read_weight(self):
-        """Get current weight in kg (converted from grams)"""
-        if not self.hx:
-            return 0.0
-            
+        """
+        Read raw data, subtract baseline, divide by calibration factor to get grams.
+        """
         try:
-            with self._lock:
-                raw_avg = self._get_raw_average(5)
-                # Calculate weight in grams then convert to kilograms
-                weight_grams = (raw_avg - self.tare_value) / self.calibration_factor
-                weight_kg = weight_grams / 1000.0  # Convert to kilograms
+            if self.baseline is None:
+                self.setup_hx711()
                 
-                # Power down and up between readings
-                self.hx.power_down()
-                time.sleep(0.001)
-                self.hx.power_up()
+            raw_vals = self.hx.get_raw_data(times=LOOP_READS)
+            if not raw_vals:
+                print("Failed to read from HX711")
+                return 0.0
                 
-                return max(0.0, weight_kg)  # Ensure non-negative weight
+            raw_avg = sum(raw_vals) / len(raw_vals)
+            grams = (raw_avg - self.baseline) / self.calibration_factor
+            return round(grams / 1000, 2)  # Convert to kg
         except Exception as e:
             print(f"Error reading weight: {e}")
             return 0.0
@@ -111,8 +71,64 @@ class LoadSensor:
             return False
             
         try:
-            self.tare_value = self._get_raw_average(10)
+
+            self.setup_hx711()
             return True
         except Exception as e:
-            print(f"Error during tare operation: {e}")
+            print(f"Error taring scale: {e}")
             return False
+
+
+def setup_hx711():
+    """
+    Initialize HX711, let it settle, and compute a baseline (tare) average.
+    Returns the hx object and the raw baseline value.
+    """
+    hx = HX711(dout_pin=DT_PIN, pd_sck_pin=SCK_PIN)
+    hx.reset()
+    time.sleep(0.1)  # allow ADC to settle
+    
+    print(f"Taring scale with {INITIAL_READS} readings... ", end="", flush=True)
+    raw_vals = hx.get_raw_data(times=INITIAL_READS)
+    if not raw_vals:
+        raise RuntimeError("Failed to read from HX711 during tare.")
+    baseline = sum(raw_vals) / len(raw_vals)
+    print(f"done (baseline={baseline:.1f}).")
+    
+    return hx, baseline
+
+def get_weight(hx, baseline, calibration_factor):
+    """
+    Read raw data, subtract baseline, divide by calibration factor to get grams.
+    """
+    raw_vals = hx.get_raw_data(times=LOOP_READS)
+    if not raw_vals:
+        return None
+    raw_avg = sum(raw_vals) / len(raw_vals)
+    grams = (raw_avg - baseline) / calibration_factor
+    return grams
+
+def main():
+    GPIO.setmode(GPIO.BCM)
+    try:
+        hx, baseline = setup_hx711()
+        print("=== STARTING WEIGHT READINGS ===")
+        print("Press Ctrl+C to quit.\n")
+        
+        while True:
+            w = get_weight(hx, baseline, CALIBRATION_FACTOR)
+            if w is None:
+                print("\rRead error!          ", end="", flush=True)
+            else:
+                print(f"\rWeight: {w:8.2f} g", end="", flush=True)
+            time.sleep(SLEEP_TIME)
+            
+    except KeyboardInterrupt:
+        print("\nExiting.")
+    except Exception as e:
+        print(f"\nError: {e}")
+    finally:
+        GPIO.cleanup()
+
+if __name__ == "__main__":
+    main()

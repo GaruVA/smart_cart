@@ -30,20 +30,19 @@ from kivy.graphics import Color, Rectangle, RoundedRectangle
 
 # Local imports
 from utils.firebase_handler import FirebaseHandler
-
-# Import real sensors instead of mock sensors
+from models.mock_sensors import MockLoadSensor, MockBarcodeScanner
 from models.ultrasonic_sensor import UltrasonicSensor
-from models.load_sensor import LoadSensor
-from models.barcode_scanner import BarcodeScanner
 
-# For fallback to mock sensors when hardware is not available
-from models.mock_sensors import MockUltrasonicSensor, MockLoadSensor, MockBarcodeScanner
 
 # Maximize the window on start
 Window.maximize()
 
 # Set window size to match typical Raspberry Pi touchscreen (800x480)
 Window.size = (800, 480)
+
+# Configure window and keyboard behavior
+Window.softinput_mode = "below_target"  # Ensures keyboard doesn't cover the input field
+Window.keyboard_anim_args = {'d': .2, 't': 'in_out_expo'}  # Smoother keyboard animation
 
 # Load KV file
 kv_file = os.path.join(os.path.dirname(__file__), 'ui', 'smartcart.kv')
@@ -79,35 +78,13 @@ class CartScreen(BoxLayout):
         super(CartScreen, self).__init__(**kwargs)
         self.shopping_cart = ShoppingCart()
         
-        # Try to initialize real sensors with fallback to mock sensors
-        try:
-            # Define GPIO pins for ultrasonic sensors from test file
-            self.front_sensor = UltrasonicSensor(trig_pin=18, echo_pin=24)  # Front sensor
-            self.rear_sensor = UltrasonicSensor(trig_pin=23, echo_pin=25)   # Rear sensor
-            self.distance_sensor = self.front_sensor  # Use front sensor as the main one
-            print("Ultrasonic sensors initialized successfully")
-        except Exception as e:
-            print(f"Failed to initialize ultrasonic sensors: {e}. Using mock sensor instead.")
-            self.distance_sensor = MockUltrasonicSensor()
-            self.distance_sensor.start_simulation()
-            
-        try:
-            # Initialize load sensor with pins from load_sensor_test.py
-            self.weight_sensor = LoadSensor(dout_pin=5, pd_sck_pin=6)
-            self.weight_sensor.start_simulation()  # Start continuous reading
-            print("Load sensor initialized successfully")
-        except Exception as e:
-            print(f"Failed to initialize load sensor: {e}. Using mock sensor instead.")
-            self.weight_sensor = MockLoadSensor()
-            self.weight_sensor.start_simulation()
-            
-        try:
-            # Initialize barcode scanner
-            self.barcode_scanner = BarcodeScanner()
-            print("Barcode scanner initialized successfully")
-        except Exception as e:
-            print(f"Failed to initialize barcode scanner: {e}. Using mock scanner instead.")
-            self.barcode_scanner = MockBarcodeScanner()
+        # Initialize sensors
+        self.distance_sensor = UltrasonicSensor()  # Using real ultrasonic sensor
+        self.weight_sensor = MockLoadSensor()
+        self.barcode_scanner = MockBarcodeScanner()
+        
+        # Start weight sensor simulation (ultrasonic doesn't need simulation)
+        self.weight_sensor.start_simulation()
         
         # Firebase handler for product data
         self.firebase = FirebaseHandler()
@@ -123,6 +100,14 @@ class CartScreen(BoxLayout):
         
         # Set initial connection status
         self.update_connection_status(0)
+        
+        # Schedule setting focus to the barcode input
+        Clock.schedule_once(self.set_barcode_input_focus, 0.5)
+    
+    def set_barcode_input_focus(self, dt):
+        """Set focus to barcode input field"""
+        if hasattr(self.ids, 'barcode_input'):
+            self.ids.barcode_input.focus = True
     
     def update_connection_status(self, dt):
         """Update connection status display"""
@@ -733,6 +718,9 @@ class SmartCartApp(App):
     
     def build(self):
         self.firebase_handler = FirebaseHandler()
+        self.ultrasonic_sensor = UltrasonicSensor()  # Using real ultrasonic sensor
+        self.load_sensor = MockLoadSensor()
+        self.barcode_scanner = MockBarcodeScanner()
         self.title = 'Smart Shopping Cart'
         return CartScreen()
     
@@ -745,6 +733,14 @@ class SmartCartApp(App):
         """Proxy to CartScreen's end_session method"""
         if self.root:
             self.root.end_session()
+    
+    def process_barcode(self, barcode_text, *args):
+        """Process barcode input from the textbox"""
+        if self.root and barcode_text.strip():
+            # Clear the input field
+            self.root.ids.barcode_input.text = ""
+            # Process the barcode
+            self.root.process_scanned_barcode(barcode_text.strip())
     
     def on_stop(self):
         """App is closing, clean up"""
