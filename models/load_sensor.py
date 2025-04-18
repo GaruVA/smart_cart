@@ -54,10 +54,24 @@ class LoadSensor:
         except Exception as e:
             print(f"Error reading weight: {e}")
             return 0.0
-            
+    
+    def add_item(self, item_weight=None):
+        """For compatibility with mock sensor - real sensor reads actual weight"""
+        # Not needed for real sensor as weight is read directly
+        pass
+    
+    def remove_item(self, item_weight=None):
+        """For compatibility with mock sensor - real sensor reads actual weight"""
+        # Not needed for real sensor as weight is read directly
+        pass
+    
     def tare(self):
         """Set current weight as zero/reference"""
+        if not self.hx:
+            return False
+            
         try:
+
             self.setup_hx711()
             return True
         except Exception as e:

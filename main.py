@@ -33,6 +33,7 @@ from utils.firebase_handler import FirebaseHandler
 from models.mock_sensors import MockLoadSensor, MockBarcodeScanner
 from models.ultrasonic_sensor import UltrasonicSensor
 
+
 # Maximize the window on start
 Window.maximize()
 
@@ -408,8 +409,19 @@ class CartScreen(BoxLayout):
     
     def update_sensor_display(self, dt):
         """Update display with sensor data (called by Clock)"""
-        distance = self.distance_sensor.read_distance()
-        weight = self.weight_sensor.read_weight()
+        # Update display with readings from real sensors
+        try:
+            distance = self.distance_sensor.read_distance()
+        except Exception as e:
+            print(f"Error reading distance: {e}")
+            distance = 0.0
+            
+        try:
+            weight = self.weight_sensor.read_weight()
+        except Exception as e:
+            print(f"Error reading weight: {e}")
+            weight = 0.0
+        
         self.ids.sensor_label.text = f"Distance: {distance:.1f} cm | Weight: {weight:.2f} kg"
     
     def end_session(self, instance=None):
@@ -639,8 +651,14 @@ class CartScreen(BoxLayout):
         
     def on_stop(self):
         """Clean up when app is closing"""
-        self.distance_sensor.stop_simulation()
-        self.weight_sensor.stop_simulation()
+        # Clean up sensors properly
+        if hasattr(self.distance_sensor, 'cleanup'):
+            self.distance_sensor.cleanup()
+        elif hasattr(self.distance_sensor, 'stop_simulation'):
+            self.distance_sensor.stop_simulation()
+            
+        if hasattr(self.weight_sensor, 'stop_simulation'):
+            self.weight_sensor.stop_simulation()
 
 
 class ShoppingCart:
