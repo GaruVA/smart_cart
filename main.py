@@ -551,7 +551,7 @@ class CartScreen(BoxLayout):
         
         total_label = Label(
             text=f"Total Amount: ${total:.2f}",
-            color=get_color_from_hex('#000000'),  # Changed to black to match theme
+            color=get_color_from_hex('#FFFFFF'),  # Changed to white for popup
             font_size='16sp',  # Reduced font
             bold=True,
             size_hint_y=None,
@@ -560,7 +560,7 @@ class CartScreen(BoxLayout):
         
         items_label = Label(
             text=f"Items: {items_count}",
-            color=get_color_from_hex('#000000'),  # Changed to black to match theme
+            color=get_color_from_hex('#FFFFFF'),  # Changed to white for popup
             font_size='14sp',  # Reduced font
             size_hint_y=None,
             height='25dp'  # Reduced height
@@ -568,7 +568,7 @@ class CartScreen(BoxLayout):
         
         session_label = Label(
             text=f"Session ID: {session_display}",
-            color=get_color_from_hex('#000000'),  # Changed to black to match theme
+            color=get_color_from_hex('#FFFFFF'),  # Changed to white for popup
             font_size='14sp',  # Reduced font
             size_hint_y=None,
             height='25dp'  # Reduced height
