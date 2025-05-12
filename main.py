@@ -86,8 +86,8 @@ class CartScreen(BoxLayout):
         # Start weight sensor simulation (ultrasonic doesn't need simulation)
         self.weight_sensor.start_simulation()
         
-        # Firebase handler for product data
-        self.firebase = FirebaseHandler()
+        # Firebase handler for product data with fixed cart ID
+        self.firebase = FirebaseHandler(cart_id="34tzyyBVfilqXhs2gjw9")
         
         # Start sensor update timer
         Clock.schedule_interval(self.update_sensor_display, 1.0)
@@ -744,7 +744,7 @@ class SmartCartApp(App):
     """Main application class"""
     
     def build(self):
-        self.firebase_handler = FirebaseHandler()
+        self.firebase_handler = FirebaseHandler(cart_id="34tzyyBVfilqXhs2gjw9")
         self.ultrasonic_sensor = UltrasonicSensor()  # Using real ultrasonic sensor
         self.load_sensor = MockLoadSensor()
         self.barcode_scanner = MockBarcodeScanner()
