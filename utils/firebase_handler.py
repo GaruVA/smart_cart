@@ -310,7 +310,28 @@ class FirebaseHandler:
             print("Running in offline mode, session not saved to cloud")
             # Generate a unique offline session ID with timestamp
             offline_id = f"offline-session-{int(time.time())}"
-            self._save_offline_session(offline_id, session_data)
+            
+            # Convert to the proper session format
+            formatted_session = {
+                'sessionId': offline_id,
+                'cartId': self.cart_id,
+                'status': session_data.get('status', 'completed'),
+                'startedAt': datetime.now().isoformat(),
+                'endedAt': datetime.now().isoformat(),
+                'totalCost': session_data.get('total_cost', 0),
+                'items': []
+            }
+            
+            # Convert items if present
+            if 'items' in session_data:
+                for item in session_data['items']:
+                    formatted_session['items'].append({
+                        'itemId': item.get('id', ''),
+                        'quantity': item.get('quantity', 1),
+                        'unitPrice': item.get('price', 0)
+                    })
+                    
+            self._save_offline_session(offline_id, formatted_session)
             return offline_id
             
         try:
@@ -336,20 +357,49 @@ class FirebaseHandler:
             # Create a new document with auto-generated ID
             session_ref = self.db.collection('sessions').document()
             session_ref.set(formatted_session)
+            
+            # Also save offline as backup
+            offline_formatted = dict(formatted_session)
+            offline_formatted['sessionId'] = session_ref.id
+            offline_formatted['startedAt'] = datetime.now().isoformat()
+            offline_formatted['endedAt'] = datetime.now().isoformat()
+            self._save_offline_session(session_ref.id, offline_formatted)
+            
             print(f"Session saved with ID: {session_ref.id}")
             return session_ref.id
         except Exception as e:
             print(f"Error saving session, using offline mode: {str(e).splitlines()[0]}")
             # Fall back to offline mode if saving to Firestore fails
             offline_id = f"offline-session-{int(time.time())}"
-            self._save_offline_session(offline_id, session_data)
+            
+            # Convert to the proper session format
+            formatted_session = {
+                'sessionId': offline_id,
+                'cartId': self.cart_id,
+                'status': session_data.get('status', 'completed'),
+                'startedAt': datetime.now().isoformat(),
+                'endedAt': datetime.now().isoformat(),
+                'totalCost': session_data.get('total_cost', 0),
+                'items': []
+            }
+            
+            # Convert items if present
+            if 'items' in session_data:
+                for item in session_data['items']:
+                    formatted_session['items'].append({
+                        'itemId': item.get('id', ''),
+                        'quantity': item.get('quantity', 1),
+                        'unitPrice': item.get('price', 0)
+                    })
+                    
+            self._save_offline_session(offline_id, formatted_session)
             return offline_id
     
     def _save_offline_session(self, session_id, session_data):
         """Save session data locally in case online saving fails
         
         Args:
-            session_id: Generated offline session ID
+            session_id: Generated session ID
             session_data: Session data dictionary
         """
         try:
@@ -357,10 +407,24 @@ class FirebaseHandler:
             sessions_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "offline_sessions")
             os.makedirs(sessions_dir, exist_ok=True)
             
+            # Ensure session data has the correct structure
+            # Convert datetime objects to string if needed
+            normalized_data = dict(session_data)
+            
+            if 'startedAt' in normalized_data and isinstance(normalized_data['startedAt'], datetime):
+                normalized_data['startedAt'] = normalized_data['startedAt'].isoformat()
+                
+            if 'endedAt' in normalized_data and isinstance(normalized_data['endedAt'], datetime):
+                normalized_data['endedAt'] = normalized_data['endedAt'].isoformat()
+                
+            # Make sure session ID is included
+            if 'sessionId' not in normalized_data:
+                normalized_data['sessionId'] = session_id
+                
             # Save session to file
             session_file = os.path.join(sessions_dir, f"{session_id}.json")
             with open(session_file, 'w') as f:
-                json.dump(session_data, f, indent=2)
+                json.dump(normalized_data, f, indent=2)
             print(f"Saved offline session to {session_file}")
         except Exception as e:
             print(f"Error saving offline session: {str(e)}")
@@ -507,6 +571,9 @@ class FirebaseHandler:
                 'totalCost': 0,
                 'items': []
             }
+            # Save offline session
+            self._save_offline_session(session_id, self.current_session)
+            print(f"Offline shopping session started with ID: {session_id}")
             return session_id
             
         try:
@@ -528,10 +595,10 @@ class FirebaseHandler:
             self.current_session = session_data
             self.current_session['sessionId'] = session_ref.id
             
-            print(f"Shopping session started with ID: {session_ref.id}")
+            print(f"Shopping session started with ID: {session_ref.id} and stored in database")
             return session_ref.id
         except Exception as e:
-            print(f"Error starting shopping session: {str(e).splitlines()[0]}")
+            print(f"Error starting shopping session in database: {str(e).splitlines()[0]}")
             # Fall back to offline mode if Firestore fails
             session_id = f"offline-session-{int(time.time())}"
             self.active_session_id = session_id
@@ -544,6 +611,9 @@ class FirebaseHandler:
                 'totalCost': 0,
                 'items': []
             }
+            # Save offline session
+            self._save_offline_session(session_id, self.current_session)
+            print(f"Created offline session due to database error: {session_id}")
             return session_id
     
     def add_item_to_session(self, item_id, quantity=1):
@@ -596,12 +666,16 @@ class FirebaseHandler:
                     'totalCost': total_cost,
                     'updatedAt': firestore.SERVER_TIMESTAMP
                 })
+                print(f"Session {self.active_session_id} updated in database with new item")
                 return True
             except Exception as e:
-                print(f"Error updating session: {str(e).splitlines()[0]}")
+                print(f"Error updating session in database: {str(e).splitlines()[0]}")
+                # Save changes locally in case of database failure
+                self._save_offline_session(self.active_session_id, self.current_session)
                 return False
         else:
             # In offline mode, just update the local session
+            self._save_offline_session(self.active_session_id, self.current_session)
             return True
     
     def remove_item_from_session(self, item_id, quantity=1):
@@ -652,12 +726,16 @@ class FirebaseHandler:
                     'totalCost': total_cost,
                     'updatedAt': firestore.SERVER_TIMESTAMP
                 })
+                print(f"Session {self.active_session_id} updated in database with item removal")
                 return True
             except Exception as e:
-                print(f"Error updating session: {str(e).splitlines()[0]}")
+                print(f"Error updating session in database: {str(e).splitlines()[0]}")
+                # Save changes locally in case of database failure
+                self._save_offline_session(self.active_session_id, self.current_session)
                 return False
         else:
             # In offline mode, just update the local session
+            self._save_offline_session(self.active_session_id, self.current_session)
             return True
     
     def complete_shopping_session(self):
@@ -691,10 +769,10 @@ class FirebaseHandler:
                 self.active_session_id = None
                 self.current_session = None
                 
-                print(f"Shopping session {completed_session_id} completed")
+                print(f"Shopping session {completed_session_id} completed and updated in database")
                 return True
             except Exception as e:
-                print(f"Error completing session: {str(e).splitlines()[0]}")
+                print(f"Error completing session in database: {str(e).splitlines()[0]}")
                 
                 # Save offline backup and clear active session
                 self._save_offline_session(self.active_session_id, self.current_session)
@@ -702,6 +780,7 @@ class FirebaseHandler:
                 self.active_session_id = None
                 self.current_session = None
                 
+                print(f"Session {completed_session_id} saved offline due to database error")
                 return False
         else:
             # Save offline backup and clear active session
@@ -710,7 +789,61 @@ class FirebaseHandler:
             self.active_session_id = None
             self.current_session = None
             
-            print(f"Offline shopping session {completed_session_id} completed")
+            print(f"Offline shopping session {completed_session_id} completed and saved locally")
+            return True
+    
+    def abandon_shopping_session(self):
+        """Mark the current shopping session as abandoned
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.active_session_id or not self.current_session:
+            print("No active shopping session to abandon")
+            return False
+            
+        # Update local session data
+        self.current_session['status'] = 'abandoned'
+        self.current_session['endedAt'] = datetime.now()
+        
+        if self.online and not self.offline_mode and self.db:
+            try:
+                session_ref = self.db.collection('sessions').document(self.active_session_id)
+                session_ref.update({
+                    'status': 'abandoned',
+                    'endedAt': firestore.SERVER_TIMESTAMP,
+                    'updatedAt': firestore.SERVER_TIMESTAMP
+                })
+                
+                # Save a local copy as backup
+                self._save_offline_session(self.active_session_id, self.current_session)
+                
+                # Clear the active session
+                abandoned_session_id = self.active_session_id
+                self.active_session_id = None
+                self.current_session = None
+                
+                print(f"Shopping session {abandoned_session_id} marked as abandoned in database")
+                return True
+            except Exception as e:
+                print(f"Error abandoning session in database: {str(e).splitlines()[0]}")
+                
+                # Save offline backup and clear active session
+                self._save_offline_session(self.active_session_id, self.current_session)
+                abandoned_session_id = self.active_session_id
+                self.active_session_id = None
+                self.current_session = None
+                
+                print(f"Session {abandoned_session_id} saved offline as abandoned due to database error")
+                return False
+        else:
+            # Save offline backup and clear active session
+            self._save_offline_session(self.active_session_id, self.current_session)
+            abandoned_session_id = self.active_session_id
+            self.active_session_id = None
+            self.current_session = None
+            
+            print(f"Offline shopping session {abandoned_session_id} marked as abandoned and saved locally")
             return True
     
     def get_active_session(self):
@@ -720,3 +853,95 @@ class FirebaseHandler:
             dict: Current session data or None if no active session
         """
         return self.current_session
+    
+    def get_session(self, session_id):
+        """Retrieve a shopping session by ID
+        
+        Args:
+            session_id: ID of the session to retrieve
+            
+        Returns:
+            dict: Session data or None if not found
+        """
+        # Check if it's the current active session
+        if self.active_session_id == session_id and self.current_session:
+            return self.current_session
+            
+        # Try to get from Firestore if online
+        if self.online and not self.offline_mode and self.db:
+            try:
+                session_ref = self.db.collection('sessions').document(session_id).get()
+                if session_ref.exists:
+                    session_data = session_ref.to_dict()
+                    session_data['sessionId'] = session_id  # Add the ID to the data
+                    return session_data
+                else:
+                    print(f"Session {session_id} not found in database")
+            except Exception as e:
+                print(f"Error retrieving session from database: {str(e).splitlines()[0]}")
+                
+        # Try to find the offline session file
+        try:
+            sessions_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "offline_sessions")
+            session_file = os.path.join(sessions_dir, f"{session_id}.json")
+            
+            if os.path.exists(session_file):
+                with open(session_file, 'r') as f:
+                    return json.load(f)
+            else:
+                print(f"Offline session file for {session_id} not found")
+        except Exception as e:
+            print(f"Error reading offline session: {str(e)}")
+            
+        return None
+        
+    def get_recent_sessions(self, limit=10):
+        """Get recent shopping sessions for this cart
+        
+        Args:
+            limit: Maximum number of sessions to return
+            
+        Returns:
+            list: List of session data
+        """
+        sessions = []
+        
+        # Try to get from Firestore if online
+        if self.online and not self.offline_mode and self.db:
+            try:
+                # Query for sessions with this cart ID, ordered by start time
+                session_refs = (self.db.collection('sessions')
+                                .where('cartId', '==', self.cart_id)
+                                .order_by('startedAt', direction=firestore.Query.DESCENDING)
+                                .limit(limit)
+                                .stream())
+                                
+                for session_ref in session_refs:
+                    session_data = session_ref.to_dict()
+                    session_data['sessionId'] = session_ref.id  # Add the ID to the data
+                    sessions.append(session_data)
+                    
+                if sessions:
+                    return sessions
+            except Exception as e:
+                print(f"Error retrieving sessions from database: {str(e).splitlines()[0]}")
+                
+        # If online retrieval failed or returned no results, try offline
+        try:
+            sessions_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "offline_sessions")
+            if os.path.exists(sessions_dir):
+                session_files = [f for f in os.listdir(sessions_dir) if f.endswith('.json')]
+                # Sort by modification time (newest first)
+                session_files.sort(key=lambda f: os.path.getmtime(os.path.join(sessions_dir, f)), reverse=True)
+                
+                for file_name in session_files[:limit]:
+                    try:
+                        with open(os.path.join(sessions_dir, file_name), 'r') as f:
+                            session_data = json.load(f)
+                            sessions.append(session_data)
+                    except Exception as e:
+                        print(f"Error reading offline session {file_name}: {str(e)}")
+        except Exception as e:
+            print(f"Error listing offline sessions: {str(e)}")
+            
+        return sessions

@@ -1,0 +1,15 @@
+{
+  "cartId": "34tzyyBVfilqXhs2gjw9",
+  "status": "completed",
+  "startedAt": "2025-05-14T22:25:14.788490",
+  "endedAt": "2025-05-14T22:25:14.788507",
+  "totalCost": 0,
+  "items": [
+    {
+      "itemId": "0011110000129",
+      "quantity": 1,
+      "unitPrice": 1.49
+    }
+  ],
+  "sessionId": "uPLi7eEGEUUzWv0Lgnm9"
+}
