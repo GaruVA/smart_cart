@@ -346,13 +346,22 @@ class FirebaseHandler:
             }
             
             # Convert items if present
+            total_cost = 0
             if 'items' in session_data:
                 for item in session_data['items']:
+                    unit_price = item.get('price', 0)
+                    quantity = item.get('quantity', 1)
+                    item_total = unit_price * quantity
+                    total_cost += item_total
+                    
                     formatted_session['items'].append({
                         'itemId': item.get('id', ''),
-                        'quantity': item.get('quantity', 1),
-                        'unitPrice': item.get('price', 0)
+                        'quantity': quantity,
+                        'unitPrice': unit_price
                     })
+                
+                # Update the total cost with the calculated value
+                formatted_session['totalCost'] = total_cost
             
             # Create a new document with auto-generated ID
             session_ref = self.db.collection('sessions').document()
@@ -391,6 +400,9 @@ class FirebaseHandler:
                         'quantity': item.get('quantity', 1),
                         'unitPrice': item.get('price', 0)
                     })
+                
+                # Update the total cost with the calculated value
+                formatted_session['totalCost'] = total_cost
                     
             self._save_offline_session(offline_id, formatted_session)
             return offline_id
@@ -654,7 +666,8 @@ class FirebaseHandler:
         # Recalculate total cost
         total_cost = 0
         for item in self.current_session.get('items', []):
-            total_cost += item.get('unitPrice', 0) * item.get('quantity', 0)
+            item_total = item.get('unitPrice', 0) * item.get('quantity', 0)
+            total_cost += item_total
         self.current_session['totalCost'] = total_cost
         
         # Update the session in Firestore if online
@@ -714,7 +727,8 @@ class FirebaseHandler:
         # Recalculate total cost
         total_cost = 0
         for item in self.current_session.get('items', []):
-            total_cost += item.get('unitPrice', 0) * item.get('quantity', 0)
+            item_total = item.get('unitPrice', 0) * item.get('quantity', 0)
+            total_cost += item_total
         self.current_session['totalCost'] = total_cost
         
         # Update the session in Firestore if online
