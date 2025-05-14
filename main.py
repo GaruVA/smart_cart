@@ -32,6 +32,7 @@ from kivy.graphics import Color, Rectangle, RoundedRectangle
 from utils.firebase_handler import FirebaseHandler
 from models.mock_sensors import MockLoadSensor, MockBarcodeScanner
 from models.ultrasonic_sensor import UltrasonicSensor
+from models.load_sensor import LoadSensor
 
 
 # Maximize the window on start
@@ -80,11 +81,20 @@ class CartScreen(BoxLayout):
         
         # Initialize sensors
         self.distance_sensor = UltrasonicSensor()  # Using real ultrasonic sensor
-        self.weight_sensor = MockLoadSensor()
-        self.barcode_scanner = MockBarcodeScanner()
         
-        # Start weight sensor simulation (ultrasonic doesn't need simulation)
-        self.weight_sensor.start_simulation()
+        # Use real load sensor instead of mock
+        try:
+            print("Initializing real load sensor...")
+            self.weight_sensor = LoadSensor()
+            # Start continuous weight reading for smoother measurements
+            self.weight_sensor.start_reading()
+        except Exception as e:
+            print(f"Error initializing load sensor, falling back to mock: {e}")
+            self.weight_sensor = MockLoadSensor()
+            # Start weight sensor simulation as fallback
+            self.weight_sensor.start_simulation()
+            
+        self.barcode_scanner = MockBarcodeScanner()
         
         # Firebase handler for product data with fixed cart ID
         self.firebase = FirebaseHandler(cart_id="34tzyyBVfilqXhs2gjw9")
@@ -289,7 +299,13 @@ class CartScreen(BoxLayout):
             # Add product to cart
             self.shopping_cart.add_item(product)
             
-            # Update weight simulation
+            # Start monitoring weight changes if this is the first item
+            if len(self.shopping_cart.items) == 1:
+                # Start weight monitoring only when first item is added
+                if hasattr(self.weight_sensor, 'start_monitoring'):
+                    self.weight_sensor.start_monitoring()
+                    
+            # Update weight simulation (for mock sensor)
             if 'weight' in product:
                 self.weight_sensor.add_item(product['weight'])
             
@@ -417,12 +433,30 @@ class CartScreen(BoxLayout):
             distance = 0.0
             
         try:
+            # The weight reading is already averaged in the LoadSensor class
             weight = self.weight_sensor.read_weight()
+            
+            # Check if we have stable weight that differs from the cart's expected weight
+            # This could detect theft or incorrect scanning
+            expected_weight = 0
+            for item in self.shopping_cart.items.values():
+                if 'weight' in item:
+                    expected_weight += item['weight']
+            
+            # Display weight in kg with 2 decimal places for precision
+            weight_str = f"Weight: {weight:.2f} kg"
+            
+            # Add indication if real weight differs significantly from expected weight
+            # Only do this if we have items in the cart and expected weights
+            significant_diff = 0.1  # kg threshold (100g)
+            if expected_weight > 0 and abs(weight - expected_weight) > significant_diff:
+                weight_str += f" (Expected: {expected_weight:.2f} kg)"
         except Exception as e:
             print(f"Error reading weight: {e}")
             weight = 0.0
+            weight_str = f"Weight: {weight:.2f} kg"
         
-        self.ids.sensor_label.text = f"Distance: {distance:.1f} cm | Weight: {weight:.2f} kg"
+        self.ids.sensor_label.text = f"Distance: {distance:.1f} cm | {weight_str}"
     
     def end_session(self, instance=None):
         """End shopping session and generate checkout info"""
@@ -614,7 +648,15 @@ class CartScreen(BoxLayout):
         def on_close(instance):
             popup.dismiss()
             self.shopping_cart.clear()
+            
+            # Stop monitoring and reset weight sensor
+            if hasattr(self.weight_sensor, 'stop_monitoring'):
+                self.weight_sensor.stop_monitoring()
+                
+            # Tare the scale for next session
             self.weight_sensor.tare()
+            
+            # Update UI
             self.update_cart_display()
             
         done_btn.bind(on_press=on_close)
@@ -684,8 +726,18 @@ class CartScreen(BoxLayout):
         elif hasattr(self.distance_sensor, 'stop_simulation'):
             self.distance_sensor.stop_simulation()
             
-        if hasattr(self.weight_sensor, 'stop_simulation'):
+        # Proper cleanup for weight sensor (real or mock)
+        if hasattr(self.weight_sensor, 'cleanup'):
+            self.weight_sensor.cleanup()
+        elif hasattr(self.weight_sensor, 'stop_simulation'):
             self.weight_sensor.stop_simulation()
+            
+        # Stop monitoring and continuous reading if available
+        if hasattr(self.weight_sensor, 'stop_monitoring'):
+            self.weight_sensor.stop_monitoring()
+            
+        if hasattr(self.weight_sensor, 'stop_reading'):
+            self.weight_sensor.stop_reading()
 
 
 class ShoppingCart:
