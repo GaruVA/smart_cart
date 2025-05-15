@@ -335,8 +335,13 @@ class FirebaseHandler:
             return offline_id
             
         try:
+            # Create a new document with auto-generated ID first to get the ID
+            session_ref = self.db.collection('sessions').document()
+            session_id = session_ref.id
+            
             # Convert to the new session format
             formatted_session = {
+                'sessionId': session_id,  # Include session ID in the initial document
                 'cartId': self.cart_id,
                 'status': session_data.get('status', 'completed'),
                 'startedAt': firestore.SERVER_TIMESTAMP,
@@ -363,19 +368,17 @@ class FirebaseHandler:
                 # Update the total cost with the calculated value
                 formatted_session['totalCost'] = total_cost
             
-            # Create a new document with auto-generated ID
-            session_ref = self.db.collection('sessions').document()
+            # Set the document data in Firestore
             session_ref.set(formatted_session)
             
             # Also save offline as backup
             offline_formatted = dict(formatted_session)
-            offline_formatted['sessionId'] = session_ref.id
             offline_formatted['startedAt'] = datetime.now().isoformat()
             offline_formatted['endedAt'] = datetime.now().isoformat()
-            self._save_offline_session(session_ref.id, offline_formatted)
+            self._save_offline_session(session_id, offline_formatted)
             
-            print(f"Session saved with ID: {session_ref.id}")
-            return session_ref.id
+            print(f"Session saved with ID: {session_id}")
+            return session_id
         except Exception as e:
             print(f"Error saving session, using offline mode: {str(e).splitlines()[0]}")
             # Fall back to offline mode if saving to Firestore fails
@@ -589,8 +592,13 @@ class FirebaseHandler:
             return session_id
             
         try:
-            # Create a new session document
+            # Create a new document with auto-generated ID first to get the ID
+            session_ref = self.db.collection('sessions').document()
+            self.active_session_id = session_ref.id
+            
+            # Create a new session document with the session ID included
             session_data = {
+                'sessionId': self.active_session_id,  # Include session ID in the initial document
                 'cartId': self.cart_id,
                 'status': 'active',
                 'startedAt': firestore.SERVER_TIMESTAMP,
@@ -599,13 +607,10 @@ class FirebaseHandler:
                 'items': []
             }
             
-            # Create a new document with auto-generated ID
-            session_ref = self.db.collection('sessions').document()
+            # Set the document data
             session_ref.set(session_data)
             
-            self.active_session_id = session_ref.id
             self.current_session = session_data
-            self.current_session['sessionId'] = session_ref.id
             
             print(f"Shopping session started with ID: {session_ref.id} and stored in database")
             return session_ref.id
@@ -675,6 +680,7 @@ class FirebaseHandler:
             try:
                 session_ref = self.db.collection('sessions').document(self.active_session_id)
                 session_ref.update({
+                    'sessionId': self.active_session_id,  # Include session ID in the update
                     'items': [dict(item) for item in self.current_session.get('items', [])],
                     'totalCost': total_cost,
                     'updatedAt': firestore.SERVER_TIMESTAMP
@@ -736,6 +742,7 @@ class FirebaseHandler:
             try:
                 session_ref = self.db.collection('sessions').document(self.active_session_id)
                 session_ref.update({
+                    'sessionId': self.active_session_id,  # Include session ID in the update
                     'items': [dict(item) for item in self.current_session.get('items', [])],
                     'totalCost': total_cost,
                     'updatedAt': firestore.SERVER_TIMESTAMP
@@ -770,6 +777,7 @@ class FirebaseHandler:
             try:
                 session_ref = self.db.collection('sessions').document(self.active_session_id)
                 session_ref.update({
+                    'sessionId': self.active_session_id,  # Include session ID in the update
                     'status': 'completed',
                     'endedAt': firestore.SERVER_TIMESTAMP,
                     'updatedAt': firestore.SERVER_TIMESTAMP
@@ -824,6 +832,7 @@ class FirebaseHandler:
             try:
                 session_ref = self.db.collection('sessions').document(self.active_session_id)
                 session_ref.update({
+                    'sessionId': self.active_session_id,  # Include session ID in the update
                     'status': 'abandoned',
                     'endedAt': firestore.SERVER_TIMESTAMP,
                     'updatedAt': firestore.SERVER_TIMESTAMP
