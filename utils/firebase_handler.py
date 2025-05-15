@@ -20,22 +20,15 @@ class FirebaseHandler:
         self.offline_mode = False
         self.credentials_path = credentials_path or self._find_credentials()
         self.mock_database = None
-        self.cart_id = cart_id or "5DxLednzNqTVqfwbs2xf"
+        self.cart_id = cart_id or "5DxLednzNqfwbs2xf"
         self.active_session_id = None
         self.current_session = None
         
-        # Register the cart in Firestore when initializing
+        # Initialize Firebase and register the cart
         if self.credentials_path:
             self.initialize_firebase()
             if self.online and not self.offline_mode:
                 self._register_new_cart(self.cart_id)
-        else:
-            self.offline_mode = True
-            self.mock_database = self._get_basic_mock_database()
-            print("Firebase credentials not found, running in offline mode")
-        
-        if self.credentials_path:
-            self.initialize_firebase()
         else:
             self.offline_mode = True
             self.mock_database = self._get_basic_mock_database()
@@ -467,6 +460,11 @@ class FirebaseHandler:
         try:
             # Try a simple operation to check if Firestore is working
             collections = list(self.db.collections())
+            
+            # If we were previously offline, sync any offline logs
+            if self.offline_mode:
+                self.sync_offline_logs()
+                
             self.online = True
             self.offline_mode = False
             
@@ -487,13 +485,119 @@ class FirebaseHandler:
                     
             return False
             
+    def log_cart_activity(self, activity_type, details=None):
+        """Log basic cart activity to Firestore
+        
+        Args:
+            activity_type (str): Type of activity (scan, add, remove, checkout, etc.)
+            details (dict): Additional details about the activity
+            
+        Returns:
+            bool: True if logged to Firestore, False if stored offline or on error
+        """
+        try:
+            # Create a simple log entry
+            log_entry = {
+                'timestamp': datetime.now().isoformat(),
+                'cart_id': self.cart_id,
+                'activity_type': activity_type,
+                'details': details or {}
+            }
+            
+            # Add to Firestore
+            if not self.offline_mode and self.db:
+                try:
+                    print(f"Attempting to log to Firestore collection 'cartLogs'...")
+                    self.db.collection('cartLogs').add(log_entry)
+                    print(f"Successfully logged {activity_type} activity to Firestore")
+                    return True
+                except Exception as firestore_error:
+                    print(f"Firestore logging failed: {str(firestore_error)}")
+                    print("Falling back to offline storage...")
+                    # Fall back to offline storage
+            
+            # Store offline for later sync
+            offline_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "offline_logs")
+            os.makedirs(offline_dir, exist_ok=True)
+            
+            filename = f"log_{int(time.time())}.json"
+            file_path = os.path.join(offline_dir, filename)
+            with open(file_path, 'w') as f:
+                json.dump(log_entry, f)
+            print(f"Saved log to offline storage: {file_path}")
+            return False
+        except Exception as e:
+            print(f"Error logging activity: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
+            
+    def sync_offline_logs(self):
+        """Sync offline logs to Firebase when connection is restored
+        
+        Returns:
+            tuple: (int, int) - (number of logs synced, number of logs that failed)
+        """
+        if self.offline_mode or not self.db:
+            print("Cannot sync logs: system is offline")
+            return (0, 0)
+            
+        # Path to offline logs
+        offline_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "offline_logs")
+        print(f"Looking for offline logs in: {offline_dir}")
+        
+        if not os.path.exists(offline_dir):
+            print("No offline logs directory found")
+            return (0, 0)
+            
+        # Get all log files
+        log_files = [f for f in os.listdir(offline_dir) if f.endswith('.json')]
+        print(f"Found {len(log_files)} offline log files: {log_files}")
+        
+        if not log_files:
+            print("No offline logs found")
+            return (0, 0)
+            
+        synced = 0
+        failed = 0
+        
+        for log_file in log_files:
+            file_path = os.path.join(offline_dir, log_file)
+            print(f"Processing log file: {file_path}")
+            
+            try:
+                # Read log data
+                with open(file_path, 'r') as f:
+                    log_data = json.load(f)
+                    print(f"Read log data: {log_data['activity_type']} at {log_data['timestamp']}")
+                    
+                # Add to Firestore
+                print("Attempting to add to Firestore...")
+                self.db.collection('cartLogs').add(log_data)
+                print("Successfully added to Firestore")
+                
+                # Delete the file after successful sync
+                os.remove(file_path)
+                print(f"Deleted synced log file: {file_path}")
+                
+                synced += 1
+                
+            except Exception as e:
+                print(f"Error syncing log {log_file}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                failed += 1
+                
+        print(f"Sync complete: {synced} logs synced, {failed} logs failed")
+        return (synced, failed)
+            
     def _load_or_generate_cart_id(self):
         """Return the fixed cart ID and update the config file if needed
         
         Returns:
-            str: Fixed cart ID "5DxLednzNqTVqfwbs2xf"
+            str: Fixed cart ID "5DxLednzNqfwbs2xf"
         """
-        fixed_cart_id = "5DxLednzNqTVqfwbs2xf"
+        fixed_cart_id = "5DxLednzNqfwbs2xf"
         cart_config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cart_config.json")
         
         # Update the config file with the fixed cart ID for consistency

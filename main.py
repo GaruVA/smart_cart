@@ -300,6 +300,14 @@ class CartScreen(BoxLayout):
             pre_add_weight = self.weight_sensor.read_weight()
             expected_weight_change = product.get('weight', 0)
             
+            # Log the scan activity
+            self.firebase.log_cart_activity('scan', {
+                'barcode': barcode,
+                'product_name': product['name'],
+                'price': product['price'],
+                'weight_before': pre_add_weight
+            })
+            
             # Add product to cart
             self.shopping_cart.add_item(product)
             
@@ -328,6 +336,16 @@ class CartScreen(BoxLayout):
             
             # Update UI
             self.update_cart_display()
+            
+            # Log weight after adding
+            weight_after = self.weight_sensor.read_weight()
+            self.firebase.log_cart_activity('weight_change', {
+                'product_name': product['name'],
+                'weight_before': weight_after - (product.get('weight', 0)),
+                'weight_after': weight_after,
+                'weight_difference': product.get('weight', 0),
+                'distance': self.distance_sensor.read_distance()
+            })
             
             # Show success message
             self.show_toast(f"Added {product['name']}")
@@ -499,6 +517,13 @@ class CartScreen(BoxLayout):
     
     def _complete_item_removal(self, item_id, item):
         """Complete the item removal after animation"""
+        # Log item removal
+        self.firebase.log_cart_activity('remove', {
+            'product_name': item['name'],
+            'price': item['price'],
+            'weight_before': self.weight_sensor.read_weight()
+        })
+        
         # Remove from shopping cart
         self.shopping_cart.remove_item(item_id)
         
@@ -568,6 +593,13 @@ class CartScreen(BoxLayout):
         
         # Update connection status after trying to save session
         self.update_connection_status(0)
+        
+        # Log checkout activity
+        self.firebase.log_cart_activity('checkout', {
+            'total_amount': self.shopping_cart.get_total(),
+            'item_count': len(self.shopping_cart.items),
+            'session_id': session_id
+        })
         
         # Display checkout information
         self.show_checkout_popup(session_id)
