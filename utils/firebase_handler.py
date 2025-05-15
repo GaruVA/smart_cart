@@ -13,14 +13,14 @@ class FirebaseHandler:
         
         Args:
             credentials_path: Path to Firebase credentials JSON file
-            cart_id: ID of the cart (if None, will use the fixed cart ID "34tzyyBVfilqXhs2gjw9")
+            cart_id: ID of the cart (if None, will use the fixed cart ID "5DxLednzNqTVqfwbs2xf")
         """
         self.db = None
         self.online = False
         self.offline_mode = False
         self.credentials_path = credentials_path or self._find_credentials()
         self.mock_database = None
-        self.cart_id = cart_id or "34tzyyBVfilqXhs2gjw9"
+        self.cart_id = cart_id or "5DxLednzNqTVqfwbs2xf"
         self.active_session_id = None
         self.current_session = None
         
@@ -491,9 +491,9 @@ class FirebaseHandler:
         """Return the fixed cart ID and update the config file if needed
         
         Returns:
-            str: Fixed cart ID "34tzyyBVfilqXhs2gjw9"
+            str: Fixed cart ID "5DxLednzNqTVqfwbs2xf"
         """
-        fixed_cart_id = "34tzyyBVfilqXhs2gjw9"
+        fixed_cart_id = "5DxLednzNqTVqfwbs2xf"
         cart_config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cart_config.json")
         
         # Update the config file with the fixed cart ID for consistency

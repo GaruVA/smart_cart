@@ -296,6 +296,10 @@ class CartScreen(BoxLayout):
         product = self.firebase.get_product_by_barcode(barcode)
         
         if product:
+            # Record weight before adding the item
+            pre_add_weight = self.weight_sensor.read_weight()
+            expected_weight_change = product.get('weight', 0)
+            
             # Add product to cart
             self.shopping_cart.add_item(product)
             
@@ -327,6 +331,16 @@ class CartScreen(BoxLayout):
             
             # Show success message
             self.show_toast(f"Added {product['name']}")
+            
+            # Check if weight actually changed
+            if 'weight' in product and product['weight'] > 0:
+                # Wait for weight sensor to stabilize (5 seconds)
+                Clock.schedule_once(lambda dt: self.verify_weight_change(
+                    pre_add_weight, 
+                    expected_weight_change, 
+                    f"Item '{product['name']}' has been added but no corresponding weight change was detected.",
+                    1.0  # Threshold in kg (adjust as needed)
+                ), 5.0)  # Check after 5 seconds
             
             # Update connection status in case network state changed
             self.update_connection_status(0)
@@ -399,14 +413,89 @@ class CartScreen(BoxLayout):
             item = self.shopping_cart.items.get(item_id)
             
             if item:
-                # Start remove animation
-                item_widget.start_remove_animation()
+                # Show confirmation popup before removal
+                self.show_confirm_removal_popup(item_id, item['name'])
+    
+    def show_confirm_removal_popup(self, item_id, item_name):
+        """Display confirmation popup before removing an item"""
+        content = BoxLayout(orientation='vertical', padding=12, spacing=8)
+        
+        # Title 
+        title_label = Label(
+            text="Remove Item?",
+            font_size='18sp',
+            color=get_color_from_hex('#F44336'),  # Red color
+            size_hint_y=None,
+            height='40dp',
+            bold=True
+        )
+        
+        # Message
+        message_label = Label(
+            text=f"Do you want to remove {item_name} from your cart?",
+            font_size='14sp',
+            color=get_color_from_hex('#757575'),
+            size_hint_y=None,
+            height='45dp'
+        )
+        
+        # Action buttons
+        buttons = BoxLayout(size_hint_y=None, height='50dp', spacing=10)
+        
+        cancel_btn = Factory.CustomButton(
+            text='Cancel',
+            size_hint_x=0.5,
+            background_color=get_color_from_hex('#9E9E9E')
+        )
+        
+        confirm_btn = Factory.CustomButton(
+            text='Remove',
+            size_hint_x=0.5,
+            background_color=get_color_from_hex('#F44336')  # Red color
+        )
+        
+        buttons.add_widget(cancel_btn)
+        buttons.add_widget(confirm_btn)
+        
+        content.add_widget(title_label)
+        content.add_widget(message_label)
+        content.add_widget(buttons)
+        
+        popup = Factory.CustomPopup(
+            title='',
+            content=content,
+            size_hint=(None, None),
+            size=('350dp', '200dp'),
+            auto_dismiss=True
+        )
+        
+        # Define button actions
+        cancel_btn.bind(on_press=popup.dismiss)
+        
+        def on_confirm(instance):
+            popup.dismiss()
+            # Continue with item removal process
+            item_widgets = [w for w in self.ids.item_list.children if isinstance(w, ItemWidget) and w.item_id == item_id]
+            if item_widgets:
+                item_widget = item_widgets[0]
+                item = self.shopping_cart.items.get(item_id)
                 
-                # Remove from shopping cart after animation
-                Clock.schedule_once(
-                    lambda dt: self._complete_item_removal(item_id, item),
-                    0.3
-                )
+                if item:
+                    # Remember current weight to verify after removal
+                    self.pre_removal_weight = self.weight_sensor.read_weight()
+                    self.expected_weight_change = item.get('weight', 0)
+                    
+                    # Start remove animation
+                    item_widget.start_remove_animation()
+                    
+                    # Remove from shopping cart after animation
+                    Clock.schedule_once(
+                        lambda dt: self._complete_item_removal(item_id, item),
+                        0.3
+                    )
+        
+        confirm_btn.bind(on_press=on_confirm)
+        popup.open()
     
     def _complete_item_removal(self, item_id, item):
         """Complete the item removal after animation"""
@@ -419,6 +508,16 @@ class CartScreen(BoxLayout):
         
         # Update UI
         self.update_cart_display()
+        
+        # Check if weight actually changed
+        if hasattr(self, 'pre_removal_weight') and hasattr(self, 'expected_weight_change'):
+            # Wait for weight sensor to stabilize (5 seconds)
+            Clock.schedule_once(lambda dt: self.verify_weight_change(
+                self.pre_removal_weight, 
+                -self.expected_weight_change, 
+                f"Item '{item['name']}' has been removed but no corresponding weight change was detected.",
+                1.0  # Threshold in kg (adjust as needed)
+            ), 5.0)  # Check after 5 seconds
         
         # Show removed message
         self.show_toast(f"Removed {item['name']}")
@@ -738,7 +837,85 @@ class CartScreen(BoxLayout):
             
         if hasattr(self.weight_sensor, 'stop_reading'):
             self.weight_sensor.stop_reading()
-
+    
+    def verify_weight_change(self, previous_weight, expected_change, warning_message, threshold=0.1):
+        """Verify that the weight has changed as expected
+        
+        Args:
+            previous_weight (float): Weight before the change
+            expected_change (float): Expected weight change (positive for addition, negative for removal)
+            warning_message (str): Message to show if weight change is not detected
+            threshold (float): Minimum weight change to consider valid (in kg)
+        """
+        current_weight = self.weight_sensor.read_weight()
+        actual_change = current_weight - previous_weight
+        
+        # Check if the actual change is close to the expected change
+        # For real-world use, we use a threshold to account for sensor variations
+        if abs(actual_change - expected_change) > threshold:
+            # Weight did not change as expected
+            self.show_weight_warning_popup(warning_message, 
+                                          f"Expected change: {expected_change:.2f} kg\nActual change: {actual_change:.2f} kg")
+    
+    def show_weight_warning_popup(self, title, message):
+        """Display a warning popup for weight inconsistencies"""
+        content = BoxLayout(orientation='vertical', padding=12, spacing=8)
+        
+        # Title with warning styling
+        title_label = Label(
+            text=title,
+            font_size='18sp',
+            color=get_color_from_hex('#FF9800'),  # Orange warning color
+            size_hint_y=None,
+            height='60dp',  # Increased for multi-line
+            bold=True
+        )
+        title_label.bind(size=title_label.setter('text_size'))  # Enable text wrapping
+        
+        # Message
+        message_label = Label(
+            text=message,
+            font_size='14sp',
+            color=get_color_from_hex('#757575'),
+            size_hint_y=None,
+            height='80dp'  # Increased for multi-line
+        )
+        message_label.bind(size=message_label.setter('text_size'))  # Enable text wrapping
+        
+        # OK button
+        ok_btn = Factory.CustomButton(
+            text="OK",
+            size_hint=(0.4, None),
+            height='40dp',
+            pos_hint={'center_x': 0.5},
+            background_color=get_color_from_hex('#FF9800')  # Orange warning color
+        )
+        
+        content.add_widget(title_label)
+        content.add_widget(message_label)
+        content.add_widget(ok_btn)
+        
+        popup = Factory.CustomPopup(
+            title='',
+            content=content,
+            size_hint=(None, None),
+            size=(350, 200),
+            auto_dismiss=True
+        )
+        
+        def on_close(instance):
+            anim = Animation(opacity=0, duration=0.2)
+            anim.bind(on_complete=lambda *x: popup.dismiss())
+            anim.start(content)
+            
+        ok_btn.bind(on_press=on_close)
+        
+        content.opacity = 0
+        popup.open()
+        
+        anim = Animation(opacity=1, duration=0.2)
+        anim.start(content)
+        
 
 class ShoppingCart:
     """Manages the shopping cart items and operations"""
