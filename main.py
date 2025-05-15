@@ -352,14 +352,13 @@ class CartScreen(BoxLayout):
             
             # Check if weight actually changed
             if 'weight' in product and product['weight'] > 0:
-                # Wait for weight sensor to stabilize (5 seconds)
+                # Wait for weight sensor to stabilize (10 seconds)
                 Clock.schedule_once(lambda dt: self.verify_weight_change(
                     pre_add_weight, 
                     expected_weight_change, 
                     f"Item '{product['name']}' has been added but no corresponding weight change was detected.",
                     1.0  # Threshold in kg (adjust as needed)
-                ), 5.0)  # Check after 5 seconds
-            
+                ), 10.0)  # Check after 10 seconds 
             # Update connection status in case network state changed
             self.update_connection_status(0)
     
@@ -536,13 +535,13 @@ class CartScreen(BoxLayout):
         
         # Check if weight actually changed
         if hasattr(self, 'pre_removal_weight') and hasattr(self, 'expected_weight_change'):
-            # Wait for weight sensor to stabilize (5 seconds)
+            # Wait for weight sensor to stabilize (10 seconds)
             Clock.schedule_once(lambda dt: self.verify_weight_change(
                 self.pre_removal_weight, 
                 -self.expected_weight_change, 
                 f"Item '{item['name']}' has been removed but no corresponding weight change was detected.",
                 1.0  # Threshold in kg (adjust as needed)
-            ), 5.0)  # Check after 5 seconds
+            ), 10.0)  # Check after 10 seconds
         
         # Show removed message
         self.show_toast(f"Removed {item['name']}")
